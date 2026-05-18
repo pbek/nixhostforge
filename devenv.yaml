@@ -1,5 +1,17 @@
+# yaml-language-server: $schema=https://devenv.sh/devenv.schema.json
 inputs:
-  devenv:
-    url: https://github.com/cachix/devenv/archive/58b04522edfe56e4b37a4d4600104db6429f4667.tar.gz
   nixpkgs:
-    url: https://github.com/NixOS/nixpkgs/archive/d233902339c02a9c334e7e593de68855ad26c4cb.tar.gz
+    url: github:cachix/devenv-nixpkgs/rolling
+  shared:
+    url: github:pbek/nix-shared
+    flake: false
+  git-hooks:
+    url: github:cachix/git-hooks.nix
+    inputs:
+      nixpkgs:
+        follows: nixpkgs
+
+imports:
+  - shared/common
+  - shared/javascript
+  - shared/go

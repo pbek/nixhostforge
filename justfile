@@ -1,3 +1,9 @@
+import ".shared/common.just"
+
+# By default, run the `--list` command
+default:
+    @just --list
+
 frontend-build:
     npm --prefix frontend run build
 
