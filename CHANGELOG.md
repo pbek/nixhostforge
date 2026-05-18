@@ -1,0 +1,20 @@
+# Changelog
+
+## 0.1.0
+
+Initial release of NixHostForge.
+
+### Added
+
+- Periodic checks for a configured Git repository and branch.
+- Host discovery from `nixosConfigurations`.
+- Web UI for selecting which hosts to build.
+- Web UI repository setup when no repository is configured by the module/static config.
+- Web UI scheduler setup for interval and concurrency when they are not configured by the module/static config.
+- Test button for notification settings.
+- Build history with logs and output paths.
+- Pause selector that stops currently running builds and prevents new builds for the selected number of hours.
+- First-use password setup and login sessions.
+- Failure notifications through shoutrrr.
+- Automatic rebuild suppression for hosts that failed on the same commit.
+- Nix package, app, NixOS module, and devenv environment.
