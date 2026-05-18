@@ -22,7 +22,15 @@ func (a *App) ensureRepo(ctx context.Context) (string, error) {
 		if err := os.RemoveAll(repoDir); err != nil {
 			return "", err
 		}
-		cmd := exec.CommandContext(ctx, "git", "clone", "--branch", repoConfig.Branch, repoConfig.Repository, repoDir)
+		cmd := exec.CommandContext(
+			ctx,
+			"git",
+			"clone",
+			"--branch",
+			repoConfig.Branch,
+			repoConfig.Repository,
+			repoDir,
+		)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return "", fmt.Errorf("git clone: %w\n%s", err, string(out))
@@ -56,7 +64,19 @@ func (a *App) currentCommit(ctx context.Context, repoDir string) (string, error)
 }
 
 func (a *App) discoverHosts(ctx context.Context, repoDir string) ([]string, error) {
-	cmd := exec.CommandContext(ctx, "nix", "--extra-experimental-features", "nix-command", "--extra-experimental-features", "flakes", "eval", "--json", ".#nixosConfigurations", "--apply", "builtins.attrNames")
+	cmd := exec.CommandContext(
+		ctx,
+		"nix",
+		"--extra-experimental-features",
+		"nix-command",
+		"--extra-experimental-features",
+		"flakes",
+		"eval",
+		"--json",
+		".#nixosConfigurations",
+		"--apply",
+		"builtins.attrNames",
+	)
 	cmd.Dir = repoDir
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

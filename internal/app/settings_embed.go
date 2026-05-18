@@ -6,7 +6,7 @@ import (
 	"net/http"
 )
 
-//go:embed settings/dist/index.html settings/dist/assets/*
+//go:embed settings/dist
 var settingsDist embed.FS
 
 func (a *App) settingsApp(w http.ResponseWriter, r *http.Request) {

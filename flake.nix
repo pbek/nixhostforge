@@ -7,8 +7,15 @@
     devenv.url = "github:cachix/devenv";
   };
 
-  outputs = inputs@{ self, nixpkgs, flake-utils, devenv }:
-    flake-utils.lib.eachDefaultSystem (system:
+  outputs =
+    inputs@{
+      self,
+      nixpkgs,
+      flake-utils,
+      devenv,
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
       let
         pkgs = import nixpkgs { inherit system; };
         settingsFrontend = pkgs.buildNpmPackage {
@@ -37,7 +44,14 @@
           '';
           postInstall = ''
             wrapProgram $out/bin/nixhostforge \
-              --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.git pkgs.nix pkgs.openssh pkgs.cacert ]} \
+              --prefix PATH : ${
+                pkgs.lib.makeBinPath [
+                  pkgs.git
+                  pkgs.nix
+                  pkgs.openssh
+                  pkgs.cacert
+                ]
+              } \
               --set SSL_CERT_FILE ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
           '';
           meta = {
@@ -57,11 +71,15 @@
         devShells.default = devenv.lib.mkShell {
           inherit inputs pkgs;
           modules = [
-            ({ ... }: { devenv.root = "${./.}"; })
+            (_: {
+              devenv.root = "${./.}";
+            })
             ./devenv.nix
           ];
         };
-      }) // {
-        nixosModules.default = import ./nix/module.nix self;
-      };
+      }
+    )
+    // {
+      nixosModules.default = import ./nix/module.nix self;
+    };
 }

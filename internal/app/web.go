@@ -114,7 +114,12 @@ func (a *App) setup(w http.ResponseWriter, r *http.Request) {
 		password := r.FormValue("password")
 		confirm := r.FormValue("confirm")
 		if len(password) < 10 {
-			a.render(w, r, "setup", pageData{Title: "Setup", Error: "Password must be at least 10 characters."})
+			a.render(
+				w,
+				r,
+				"setup",
+				pageData{Title: "Setup", Error: "Password must be at least 10 characters."},
+			)
 			return
 		}
 		if password != confirm {
@@ -185,7 +190,21 @@ func (a *App) dashboard(w http.ResponseWriter, r *http.Request) {
 	}
 	hosts, _ := a.store.Hosts(r.Context())
 	builds, _ := a.store.Builds(r.Context(), 8)
-	a.render(w, r, "dashboard", pageData{Title: "Dashboard", Config: a.cfg, Repo: a.RepositoryConfig(r.Context()), Scheduler: a.SchedulerConfig(r.Context()), Status: a.Status(r.Context()), Hosts: hosts, Builds: builds, PauseHours: []int{1, 2, 4, 8, 12, 24}})
+	a.render(
+		w,
+		r,
+		"dashboard",
+		pageData{
+			Title:      "Dashboard",
+			Config:     a.cfg,
+			Repo:       a.RepositoryConfig(r.Context()),
+			Scheduler:  a.SchedulerConfig(r.Context()),
+			Status:     a.Status(r.Context()),
+			Hosts:      hosts,
+			Builds:     builds,
+			PauseHours: []int{1, 2, 4, 8, 12, 24},
+		},
+	)
 }
 
 func (a *App) hosts(w http.ResponseWriter, r *http.Request) {
@@ -198,7 +217,12 @@ func (a *App) hosts(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	a.render(w, r, "hosts", pageData{Title: "Hosts", Config: a.cfg, Status: a.Status(r.Context()), Hosts: hosts})
+	a.render(
+		w,
+		r,
+		"hosts",
+		pageData{Title: "Hosts", Config: a.cfg, Status: a.Status(r.Context()), Hosts: hosts},
+	)
 }
 
 func (a *App) toggleHost(w http.ResponseWriter, r *http.Request) {
@@ -236,7 +260,12 @@ func (a *App) builds(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	a.render(w, r, "builds", pageData{Title: "Builds", Config: a.cfg, Status: a.Status(r.Context()), Builds: builds})
+	a.render(
+		w,
+		r,
+		"builds",
+		pageData{Title: "Builds", Config: a.cfg, Status: a.Status(r.Context()), Builds: builds},
+	)
 }
 
 func (a *App) buildDetail(w http.ResponseWriter, r *http.Request) {
@@ -255,7 +284,17 @@ func (a *App) buildDetail(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	a.render(w, r, "build", pageData{Title: fmt.Sprintf("Build %d", build.ID), Config: a.cfg, Status: a.Status(r.Context()), Build: build})
+	a.render(
+		w,
+		r,
+		"build",
+		pageData{
+			Title:  fmt.Sprintf("Build %d", build.ID),
+			Config: a.cfg,
+			Status: a.Status(r.Context()),
+			Build:  build,
+		},
+	)
 }
 
 func (a *App) settings(w http.ResponseWriter, r *http.Request) {
@@ -273,7 +312,9 @@ func (a *App) settings(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		default:
-			notificationValue, err := encodeNotificationTargets([]notificationTarget{{URL: r.FormValue("notification_url"), Enabled: true}})
+			notificationValue, err := encodeNotificationTargets(
+				[]notificationTarget{{URL: r.FormValue("notification_url"), Enabled: true}},
+			)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -305,12 +346,7 @@ func (a *App) settingsData(ctx context.Context) settingsResponse {
 		notificationURLs = append(notificationURLs, target.URL)
 	}
 	return settingsResponse{
-		Repository: settingsRepository{
-			Repository: repo.Repository,
-			Branch:     repo.Branch,
-			Mutable:    repo.Mutable,
-			Configured: repo.Configured,
-		},
+		Repository: settingsRepository(repo),
 		Scheduler: settingsScheduler{
 			Interval:           scheduler.Interval.String(),
 			IntervalMutable:    scheduler.IntervalMutable,
@@ -406,14 +442,23 @@ func (a *App) apiSettingsNotificationsTest(w http.ResponseWriter, r *http.Reques
 		writeJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"message": "Test notification sent", "settings": a.settingsData(r.Context())})
+	writeJSON(
+		w,
+		http.StatusOK,
+		map[string]any{
+			"message":  "Test notification sent",
+			"settings": a.settingsData(r.Context()),
+		},
+	)
 }
 
 func notificationValueFromRequest(req notificationRequest) (string, error) {
 	if req.NotificationURLs != nil {
 		return encodeNotificationTargets(req.NotificationURLs)
 	}
-	return encodeNotificationTargets([]notificationTarget{{URL: req.NotificationURL, Enabled: true}})
+	return encodeNotificationTargets(
+		[]notificationTarget{{URL: req.NotificationURL, Enabled: true}},
+	)
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
@@ -436,7 +481,11 @@ func (a *App) apiAuth(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, authResponse{HasAdmin: hasAdmin, Authenticated: hasAdmin && a.authenticated(r)})
+	writeJSON(
+		w,
+		http.StatusOK,
+		authResponse{HasAdmin: hasAdmin, Authenticated: hasAdmin && a.authenticated(r)},
+	)
 }
 
 func (a *App) apiSetup(w http.ResponseWriter, r *http.Request) {
@@ -513,7 +562,14 @@ func (a *App) dashboardData(ctx context.Context, buildLimit int) (dashboardRespo
 		return dashboardResponse{}, err
 	}
 	settings := a.settingsData(ctx)
-	return dashboardResponse{Repository: settings.Repository, Scheduler: settings.Scheduler, Status: a.Status(ctx), Hosts: hosts, Builds: builds, PauseHours: []int{1, 2, 4, 8, 12, 24}}, nil
+	return dashboardResponse{
+		Repository: settings.Repository,
+		Scheduler:  settings.Scheduler,
+		Status:     a.Status(ctx),
+		Hosts:      hosts,
+		Builds:     builds,
+		PauseHours: []int{1, 2, 4, 8, 12, 24},
+	}, nil
 }
 
 func (a *App) apiDashboard(w http.ResponseWriter, r *http.Request) {

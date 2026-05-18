@@ -71,7 +71,11 @@ func stopTimer(timer *time.Timer) {
 
 func (a *App) checkOnce(ctx context.Context) {
 	if paused, until := a.paused(ctx); paused {
-		a.setStatus("", time.Now().UTC(), fmt.Sprintf("paused until %s", until.Format(time.RFC3339)))
+		a.setStatus(
+			"",
+			time.Now().UTC(),
+			fmt.Sprintf("paused until %s", until.Format(time.RFC3339)),
+		)
 		return
 	}
 	repoDir, err := a.ensureRepo(ctx)
@@ -148,7 +152,17 @@ func (a *App) runBuild(ctx context.Context, repoDir, host, commit string, manual
 	}()
 
 	attr := fmt.Sprintf(".#nixosConfigurations.%s.config.system.build.toplevel", host)
-	cmd := exec.CommandContext(buildCtx, "nix", "--extra-experimental-features", "nix-command", "--extra-experimental-features", "flakes", "build", "--print-out-paths", attr)
+	cmd := exec.CommandContext(
+		buildCtx,
+		"nix",
+		"--extra-experimental-features",
+		"nix-command",
+		"--extra-experimental-features",
+		"flakes",
+		"build",
+		"--print-out-paths",
+		attr,
+	)
 	cmd.Dir = repoDir
 	var output bytes.Buffer
 	cmd.Stdout = &output
@@ -290,7 +304,12 @@ func (a *App) notifyFailure(ctx context.Context, id int64, host, commit, logText
 		shortCommit = shortCommit[:12]
 	}
 	repoConfig := a.RepositoryConfig(ctx)
-	message := fmt.Sprintf("NixHostForge build failed\n\nHost: %s\nCommit: %s\nRepository: %s\n\nOpen NixHostForge for the full build log.", host, shortCommit, repoConfig.Repository)
+	message := fmt.Sprintf(
+		"NixHostForge build failed\n\nHost: %s\nCommit: %s\nRepository: %s\n\nOpen NixHostForge for the full build log.",
+		host,
+		shortCommit,
+		repoConfig.Repository,
+	)
 	sent := false
 	for i, url := range urls {
 		if err := shoutrrr.Send(url, message); err != nil {
@@ -406,10 +425,4 @@ func lastStorePath(output string) string {
 		}
 	}
 	return ""
-}
-
-func (a *App) runningCount() int {
-	a.runningMu.Lock()
-	defer a.runningMu.Unlock()
-	return len(a.running)
 }

@@ -27,7 +27,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("init service: %v", err)
 	}
-	defer svc.Close()
+	defer func() {
+		if err := svc.Close(); err != nil {
+			log.Printf("close service: %v", err)
+		}
+	}()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

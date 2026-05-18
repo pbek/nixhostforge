@@ -48,7 +48,14 @@ func hashPassword(password string) (string, error) {
 	threads := uint8(2)
 	keyLen := uint32(32)
 	hash := argon2.IDKey([]byte(password), salt, timeCost, memory, threads, keyLen)
-	return fmt.Sprintf("$argon2id$v=19$m=%d,t=%d,p=%d$%s$%s", memory, timeCost, threads, base64.RawStdEncoding.EncodeToString(salt), base64.RawStdEncoding.EncodeToString(hash)), nil
+	return fmt.Sprintf(
+		"$argon2id$v=19$m=%d,t=%d,p=%d$%s$%s",
+		memory,
+		timeCost,
+		threads,
+		base64.RawStdEncoding.EncodeToString(salt),
+		base64.RawStdEncoding.EncodeToString(hash),
+	), nil
 }
 
 func verifyPassword(password, encoded string) (bool, error) {
@@ -120,15 +127,39 @@ func (a *App) createSession(ctx context.Context, w http.ResponseWriter) error {
 	if _, err := a.store.db.ExecContext(ctx, `insert into sessions(token_hash, created_at, expires_at) values(?, ?, ?)`, tokenHash(token), now.Format(time.RFC3339Nano), expires.Format(time.RFC3339Nano)); err != nil {
 		return err
 	}
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: token, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, Expires: expires})
+	http.SetCookie(
+		w,
+		&http.Cookie{
+			Name:     sessionCookie,
+			Value:    token,
+			Path:     "/",
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+			Expires:  expires,
+		},
+	)
 	return nil
 }
 
 func (a *App) destroySession(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie(sessionCookie); err == nil {
-		_, _ = a.store.db.ExecContext(ctx, `delete from sessions where token_hash = ?`, tokenHash(cookie.Value))
+		_, _ = a.store.db.ExecContext(
+			ctx,
+			`delete from sessions where token_hash = ?`,
+			tokenHash(cookie.Value),
+		)
 	}
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	http.SetCookie(
+		w,
+		&http.Cookie{
+			Name:     sessionCookie,
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		},
+	)
 }
 
 func (a *App) authenticated(r *http.Request) bool {
@@ -137,7 +168,8 @@ func (a *App) authenticated(r *http.Request) bool {
 		return false
 	}
 	var expires string
-	err = a.store.db.QueryRowContext(r.Context(), `select expires_at from sessions where token_hash = ?`, tokenHash(cookie.Value)).Scan(&expires)
+	err = a.store.db.QueryRowContext(r.Context(), `select expires_at from sessions where token_hash = ?`, tokenHash(cookie.Value)).
+		Scan(&expires)
 	if err != nil {
 		return false
 	}

@@ -44,7 +44,7 @@ func OpenStore(path string) (*Store, error) {
 	}
 	store := &Store{db: db}
 	if err := store.migrate(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 	return store, nil
@@ -79,7 +79,12 @@ func (s *Store) GetSetting(ctx context.Context, key string) (string, bool, error
 }
 
 func (s *Store) SetSetting(ctx context.Context, key, value string) error {
-	_, err := s.db.ExecContext(ctx, `insert into settings(key, value) values(?, ?) on conflict(key) do update set value = excluded.value`, key, value)
+	_, err := s.db.ExecContext(
+		ctx,
+		`insert into settings(key, value) values(?, ?) on conflict(key) do update set value = excluded.value`,
+		key,
+		value,
+	)
 	return err
 }
 
@@ -94,7 +99,7 @@ func (s *Store) UpsertHosts(ctx context.Context, names []string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	for _, name := range names {
 		if _, err := tx.ExecContext(ctx, `insert into hosts(name, enabled, discovered_at) values(?, 0, ?) on conflict(name) do update set discovered_at = excluded.discovered_at`, name, now); err != nil {
 			return err
@@ -113,7 +118,7 @@ func (s *Store) Hosts(ctx context.Context) ([]Host, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var hosts []Host
 	for rows.Next() {
 		var h Host
@@ -134,7 +139,7 @@ func (s *Store) EnabledHosts(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var hosts []string
 	for rows.Next() {
 		var host string
@@ -156,28 +161,60 @@ func (s *Store) SetHostEnabled(ctx context.Context, name string, enabled bool) e
 }
 
 func (s *Store) LatestBuildFor(ctx context.Context, host, commit string) (*Build, error) {
-	row := s.db.QueryRowContext(ctx, `select id, host, commit_hash, status, started_at, finished_at, exit_code, output_path, log, manual, notification_sent from builds where host = ? and commit_hash = ? order by started_at desc limit 1`, host, commit)
+	row := s.db.QueryRowContext(
+		ctx,
+		`select id, host, commit_hash, status, started_at, finished_at, exit_code, output_path, log, manual, notification_sent from builds where host = ? and commit_hash = ? order by started_at desc limit 1`,
+		host,
+		commit,
+	)
 	return scanBuild(row)
 }
 
-func (s *Store) CreateBuild(ctx context.Context, host, commit, status string, manual bool) (int64, error) {
+func (s *Store) CreateBuild(
+	ctx context.Context,
+	host, commit, status string,
+	manual bool,
+) (int64, error) {
 	manualInt := 0
 	if manual {
 		manualInt = 1
 	}
-	res, err := s.db.ExecContext(ctx, `insert into builds(host, commit_hash, status, started_at, manual) values(?, ?, ?, ?, ?)`, host, commit, status, time.Now().UTC().Format(time.RFC3339Nano), manualInt)
+	res, err := s.db.ExecContext(
+		ctx,
+		`insert into builds(host, commit_hash, status, started_at, manual) values(?, ?, ?, ?, ?)`,
+		host,
+		commit,
+		status,
+		time.Now().UTC().Format(time.RFC3339Nano),
+		manualInt,
+	)
 	if err != nil {
 		return 0, err
 	}
 	return res.LastInsertId()
 }
 
-func (s *Store) FinishBuild(ctx context.Context, id int64, status string, exitCode *int, outputPath, logText string) error {
+func (s *Store) FinishBuild(
+	ctx context.Context,
+	id int64,
+	status string,
+	exitCode *int,
+	outputPath, logText string,
+) error {
 	var exit any
 	if exitCode != nil {
 		exit = *exitCode
 	}
-	_, err := s.db.ExecContext(ctx, `update builds set status = ?, finished_at = ?, exit_code = ?, output_path = ?, log = ? where id = ?`, status, time.Now().UTC().Format(time.RFC3339Nano), exit, outputPath, logText, id)
+	_, err := s.db.ExecContext(
+		ctx,
+		`update builds set status = ?, finished_at = ?, exit_code = ?, output_path = ?, log = ? where id = ?`,
+		status,
+		time.Now().UTC().Format(time.RFC3339Nano),
+		exit,
+		outputPath,
+		logText,
+		id,
+	)
 	return err
 }
 
@@ -187,16 +224,24 @@ func (s *Store) MarkNotificationSent(ctx context.Context, id int64) error {
 }
 
 func (s *Store) Build(ctx context.Context, id int64) (*Build, error) {
-	row := s.db.QueryRowContext(ctx, `select id, host, commit_hash, status, started_at, finished_at, exit_code, output_path, log, manual, notification_sent from builds where id = ?`, id)
+	row := s.db.QueryRowContext(
+		ctx,
+		`select id, host, commit_hash, status, started_at, finished_at, exit_code, output_path, log, manual, notification_sent from builds where id = ?`,
+		id,
+	)
 	return scanBuild(row)
 }
 
 func (s *Store) Builds(ctx context.Context, limit int) ([]Build, error) {
-	rows, err := s.db.QueryContext(ctx, `select id, host, commit_hash, status, started_at, finished_at, exit_code, output_path, log, manual, notification_sent from builds order by started_at desc limit ?`, limit)
+	rows, err := s.db.QueryContext(
+		ctx,
+		`select id, host, commit_hash, status, started_at, finished_at, exit_code, output_path, log, manual, notification_sent from builds order by started_at desc limit ?`,
+		limit,
+	)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var builds []Build
 	for rows.Next() {
 		b, err := scanBuild(rows)

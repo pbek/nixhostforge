@@ -37,7 +37,7 @@ func New(cfg Config) (*App, error) {
 	}
 	tmpl, err := parseTemplates()
 	if err != nil {
-		store.Close()
+		_ = store.Close()
 		return nil, err
 	}
 	app := &App{
@@ -83,7 +83,10 @@ func (a *App) Router() http.Handler {
 	mux.HandleFunc("/api/settings/repository", a.requireAuth(a.apiSettingsRepository))
 	mux.HandleFunc("/api/settings/scheduler", a.requireAuth(a.apiSettingsScheduler))
 	mux.HandleFunc("/api/settings/notifications", a.requireAuth(a.apiSettingsNotifications))
-	mux.HandleFunc("/api/settings/notifications/test", a.requireAuth(a.apiSettingsNotificationsTest))
+	mux.HandleFunc(
+		"/api/settings/notifications/test",
+		a.requireAuth(a.apiSettingsNotificationsTest),
+	)
 	mux.HandleFunc("/pause", a.requireAuth(a.pause))
 	mux.HandleFunc("/resume", a.requireAuth(a.resume))
 	mux.HandleFunc("/check-now", a.requireAuth(a.checkNow))

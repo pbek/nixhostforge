@@ -64,7 +64,7 @@ func LoadConfig(path string) (Config, error) {
 	if err != nil {
 		return cfg, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	lineNo := 0
@@ -206,7 +206,11 @@ func (a *App) RepositoryConfig(ctx context.Context) RepositoryConfig {
 		if branch == "" {
 			branch = "main"
 		}
-		return RepositoryConfig{Repository: strings.TrimSpace(a.cfg.Repository), Branch: branch, Configured: true}
+		return RepositoryConfig{
+			Repository: strings.TrimSpace(a.cfg.Repository),
+			Branch:     branch,
+			Configured: true,
+		}
 	}
 
 	repository, _, _ := a.store.GetSetting(ctx, "repository")
@@ -230,7 +234,9 @@ func (a *App) RepositoryConfig(ctx context.Context) RepositoryConfig {
 
 func (a *App) SaveRepositoryConfig(ctx context.Context, repository, branch string) error {
 	if strings.TrimSpace(a.cfg.Repository) != "" {
-		return errors.New("repository is configured by static config and cannot be changed in the web UI")
+		return errors.New(
+			"repository is configured by static config and cannot be changed in the web UI",
+		)
 	}
 	repository = strings.TrimSpace(repository)
 	branch = strings.TrimSpace(branch)

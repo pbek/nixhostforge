@@ -1,8 +1,8 @@
 <script setup>
 defineProps({
   title: { type: String, required: true },
-  subtitle: { type: String, default: '' },
-})
+  subtitle: { type: String, default: "" },
+});
 </script>
 
 <template>

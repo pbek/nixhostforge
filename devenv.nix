@@ -10,7 +10,9 @@
     echo "🛠️ NixHostForge dev shell"
   '';
 
-  scripts.test.exec = "go test ./...";
-  scripts.run.exec = "go run ./cmd/nixhostforge --config ./config.toml";
-  scripts.build.exec = "nix build .#";
+  scripts = {
+    test.exec = "go test ./...";
+    run.exec = "go run ./cmd/nixhostforge --config ./config.toml";
+    build.exec = "nix build .#";
+  };
 }

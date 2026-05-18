@@ -1,9 +1,14 @@
 self:
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   cfg = config.services.nixhostforge;
-  package = cfg.package;
+  inherit (cfg) package;
   configFile = pkgs.writeText "nixhostforge-config.toml" ''
     repository = "${cfg.repository}"
     branch = "${cfg.branch}"
@@ -11,7 +16,7 @@ let
     port = ${toString cfg.port}
     state_dir = "${cfg.stateDir}"
     ${lib.optionalString (cfg.interval != null) ''interval = "${cfg.interval}"''}
-    ${lib.optionalString (cfg.concurrency != null) ''concurrency = ${toString cfg.concurrency}''}
+    ${lib.optionalString (cfg.concurrency != null) "concurrency = ${toString cfg.concurrency}"}
   '';
 in
 {
@@ -94,7 +99,12 @@ in
       wantedBy = [ "multi-user.target" ];
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
-      path = [ pkgs.git pkgs.nix pkgs.openssh pkgs.cacert ];
+      path = [
+        pkgs.git
+        pkgs.nix
+        pkgs.openssh
+        pkgs.cacert
+      ];
       environment = {
         SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
         NIX_SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
