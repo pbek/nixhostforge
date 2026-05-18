@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -25,6 +26,11 @@ type SchedulerStatus struct {
 	LastError     string     `json:"lastError"`
 	RunningBuilds int        `json:"runningBuilds"`
 	PausedUntil   *time.Time `json:"pausedUntil"`
+}
+
+type notificationTarget struct {
+	URL     string `json:"url"`
+	Enabled bool   `json:"enabled"`
 }
 
 func ShouldBuild(previous *Build, manual bool) bool {
@@ -274,8 +280,9 @@ func (a *App) Status(ctx context.Context) SchedulerStatus {
 }
 
 func (a *App) notifyFailure(ctx context.Context, id int64, host, commit, logText string) {
-	url, ok, err := a.store.GetSetting(ctx, "notification_url")
-	if err != nil || !ok || strings.TrimSpace(url) == "" {
+	value, ok, err := a.store.GetSetting(ctx, "notification_url")
+	urls := enabledNotificationURLs(value)
+	if err != nil || !ok || len(urls) == 0 {
 		return
 	}
 	shortCommit := commit
@@ -284,24 +291,111 @@ func (a *App) notifyFailure(ctx context.Context, id int64, host, commit, logText
 	}
 	repoConfig := a.RepositoryConfig(ctx)
 	message := fmt.Sprintf("NixHostForge build failed\n\nHost: %s\nCommit: %s\nRepository: %s\n\nOpen NixHostForge for the full build log.", host, shortCommit, repoConfig.Repository)
-	if err := shoutrrr.Send(url, message); err != nil {
-		log.Printf("send notification: %v", err)
-		return
+	sent := false
+	for i, url := range urls {
+		if err := shoutrrr.Send(url, message); err != nil {
+			log.Printf("send notification to URL %d: %v", i+1, err)
+			continue
+		}
+		sent = true
 	}
-	_ = a.store.MarkNotificationSent(ctx, id)
+	if sent {
+		_ = a.store.MarkNotificationSent(ctx, id)
+	}
 }
 
-func (a *App) SendTestNotification(ctx context.Context, url string) error {
-	url = strings.TrimSpace(url)
-	if url == "" {
-		return errors.New("notification URL must not be empty")
+func notificationTargets(value string) []notificationTarget {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+
+	if strings.HasPrefix(value, "[") {
+		var raw []struct {
+			URL     string `json:"url"`
+			Enabled *bool  `json:"enabled"`
+		}
+		if err := json.Unmarshal([]byte(value), &raw); err == nil {
+			var targets []notificationTarget
+			for _, target := range raw {
+				url := strings.TrimSpace(target.URL)
+				if url == "" {
+					continue
+				}
+				enabled := true
+				if target.Enabled != nil {
+					enabled = *target.Enabled
+				}
+				targets = append(targets, notificationTarget{URL: url, Enabled: enabled})
+			}
+			return targets
+		}
+	}
+
+	var targets []notificationTarget
+	for _, line := range strings.FieldsFunc(value, func(r rune) bool { return r == '\n' || r == '\r' }) {
+		url := strings.TrimSpace(line)
+		if url != "" {
+			targets = append(targets, notificationTarget{URL: url, Enabled: true})
+		}
+	}
+	return targets
+}
+
+func normalizeNotificationTargets(targets []notificationTarget) []notificationTarget {
+	var normalized []notificationTarget
+	for _, target := range targets {
+		url := strings.TrimSpace(target.URL)
+		if url != "" {
+			normalized = append(normalized, notificationTarget{URL: url, Enabled: target.Enabled})
+		}
+	}
+	return normalized
+}
+
+func encodeNotificationTargets(targets []notificationTarget) (string, error) {
+	targets = normalizeNotificationTargets(targets)
+	if len(targets) == 0 {
+		return "", nil
+	}
+	data, err := json.Marshal(targets)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func enabledNotificationURLs(value string) []string {
+	var urls []string
+	for _, target := range notificationTargets(value) {
+		if target.Enabled {
+			urls = append(urls, target.URL)
+		}
+	}
+	return urls
+}
+
+func (a *App) SendTestNotification(ctx context.Context, value string) error {
+	urls := enabledNotificationURLs(value)
+	if len(urls) == 0 {
+		return errors.New("at least one enabled notification URL must be configured")
 	}
 	repoConfig := a.RepositoryConfig(ctx)
 	repository := repoConfig.Repository
 	if repository == "" {
 		repository = "not configured"
 	}
-	return shoutrrr.Send(url, fmt.Sprintf("NixHostForge test notification\n\nRepository: %s", repository))
+	message := fmt.Sprintf("NixHostForge test notification\n\nRepository: %s", repository)
+	var failed []string
+	for i, url := range urls {
+		if err := shoutrrr.Send(url, message); err != nil {
+			failed = append(failed, fmt.Sprintf("URL %d: %v", i+1, err))
+		}
+	}
+	if len(failed) > 0 {
+		return fmt.Errorf("send notification: %s", strings.Join(failed, "; "))
+	}
+	return nil
 }
 
 func lastStorePath(output string) string {

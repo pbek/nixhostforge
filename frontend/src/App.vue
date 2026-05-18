@@ -17,7 +17,7 @@ const snackbar = reactive({ color: 'success', message: '', show: false })
 const settings = reactive({
   repository: { repository: '', branch: 'main', mutable: false, configured: false },
   scheduler: { interval: '15m0s', intervalMutable: false, concurrency: 1, concurrencyMutable: false },
-  notificationUrl: '',
+  notificationUrls: [{ url: '', enabled: true }],
 })
 
 const authenticatedPage = computed(() => !['/login', '/setup'].includes(path.value))
@@ -50,10 +50,17 @@ function notify(message, color = 'success') {
   snackbar.show = true
 }
 
+function newNotificationUrl() {
+  return { url: '', enabled: true }
+}
+
 function applySettings(next) {
   settings.repository = { ...next.repository }
   settings.scheduler = { ...next.scheduler }
-  settings.notificationUrl = next.notificationUrl || ''
+  const targets = Array.isArray(next.notificationUrls)
+    ? next.notificationUrls
+    : (next.notificationUrl || '').split(/\r?\n/).filter(Boolean).map(url => ({ url, enabled: true }))
+  settings.notificationUrls = targets.length ? targets.map(target => ({ url: target.url || '', enabled: target.enabled !== false })) : [newNotificationUrl()]
 }
 
 function applyDashboard(data) {
@@ -228,7 +235,7 @@ async function saveScheduler() {
 async function saveNotifications() {
   saving.notifications = true
   try {
-    applySettings(await request('/api/settings/notifications', { method: 'POST', body: JSON.stringify({ notificationUrl: settings.notificationUrl }) }))
+    applySettings(await request('/api/settings/notifications', { method: 'POST', body: JSON.stringify({ notificationUrls: settings.notificationUrls }) }))
     notify('Notification settings saved.')
   } catch (error) {
     notify(error.message, 'error')
@@ -237,17 +244,30 @@ async function saveNotifications() {
   }
 }
 
-async function testNotification() {
-  saving.test = true
+async function testNotification(index) {
+  const target = settings.notificationUrls[index]
+  if (!target?.url?.trim()) {
+    notify('Notification URL must not be empty.', 'error')
+    return
+  }
+  saving.test = index + 1
   try {
-    const response = await request('/api/settings/notifications/test', { method: 'POST', body: JSON.stringify({ notificationUrl: settings.notificationUrl }) })
-    applySettings(response.settings)
+    const response = await request('/api/settings/notifications/test', { method: 'POST', body: JSON.stringify({ notificationUrls: [{ url: target.url, enabled: true }] }) })
     notify(response.message || 'Test notification sent.')
   } catch (error) {
     notify(error.message, 'error')
   } finally {
     saving.test = false
   }
+}
+
+function addNotificationUrl() {
+  settings.notificationUrls.push(newNotificationUrl())
+}
+
+function removeNotificationUrl(index) {
+  settings.notificationUrls.splice(index, 1)
+  if (!settings.notificationUrls.length) settings.notificationUrls.push(newNotificationUrl())
 }
 
 function onPopState() {
@@ -363,7 +383,30 @@ onUnmounted(() => window.removeEventListener('popstate', onPopState))
           <v-row>
             <v-col cols="12" lg="6"><v-card class="settings-card" rounded="xl"><v-card-title>Repository</v-card-title><v-card-subtitle>The flake repository that NixHostForge checks for NixOS hosts.</v-card-subtitle><v-card-text><v-form v-if="settings.repository.mutable" @submit.prevent="saveRepository"><v-text-field v-model="settings.repository.repository" label="Repository URL" placeholder="https://github.com/example/nixos-config.git" required variant="outlined" /><v-text-field v-model="settings.repository.branch" label="Branch" placeholder="main" variant="outlined" /><v-btn type="submit" color="primary" :loading="saving.repository">Save Repository</v-btn></v-form><div v-else class="d-flex flex-column ga-3"><div>Repository: <span class="readonly-value">{{ settings.repository.repository }}</span></div><div>Branch: <span class="readonly-value">{{ settings.repository.branch }}</span></div><v-alert color="info" variant="tonal">Configured by static config or the NixOS module.</v-alert></div></v-card-text></v-card></v-col>
             <v-col cols="12" lg="6"><v-card class="settings-card" rounded="xl"><v-card-title>Scheduler</v-card-title><v-card-subtitle>Control how often checks run and how many builds can run in parallel.</v-card-subtitle><v-card-text><v-form v-if="schedulerMutable" @submit.prevent="saveScheduler"><v-text-field v-if="settings.scheduler.intervalMutable" v-model="settings.scheduler.interval" label="Interval" placeholder="15m" variant="outlined" /><div v-else class="mb-4">Interval: <span class="readonly-value">{{ settings.scheduler.interval }}</span></div><v-text-field v-if="settings.scheduler.concurrencyMutable" v-model.number="settings.scheduler.concurrency" label="Concurrency" min="1" max="64" type="number" variant="outlined" /><div v-else class="mb-4">Concurrency: <span class="readonly-value">{{ settings.scheduler.concurrency }}</span></div><v-btn type="submit" color="primary" :loading="saving.scheduler">Save Scheduler Settings</v-btn></v-form><div v-else class="d-flex flex-column ga-3"><div>Interval: <span class="readonly-value">{{ settings.scheduler.interval }}</span></div><div>Concurrency: <span class="readonly-value">{{ settings.scheduler.concurrency }}</span></div><v-alert color="info" variant="tonal">Configured by static config or the NixOS module.</v-alert></div></v-card-text></v-card></v-col>
-            <v-col cols="12"><v-card class="settings-card" rounded="xl"><v-card-title>Notifications</v-card-title><v-card-subtitle>NixHostForge uses shoutrrr URLs. SMTP, Matrix, Telegram, and other shoutrrr services are supported.</v-card-subtitle><v-card-text><v-form @submit.prevent="saveNotifications"><v-text-field v-model="settings.notificationUrl" label="Notification URL" placeholder="smtp://user:pass@mail.example.com:587/?from=nix@example.com&to=ops@example.com" variant="outlined" /><div class="d-flex flex-wrap ga-3 mb-5"><v-btn type="submit" color="primary" :loading="saving.notifications">Save Notifications</v-btn><v-btn color="secondary" variant="tonal" :loading="saving.test" @click="testNotification">Test</v-btn></div></v-form><v-alert color="info" variant="tonal" class="mb-4">Use any shoutrrr service URL. See the <a href="https://containrrr.dev/shoutrrr/v0.8/services/overview/" target="_blank" rel="noreferrer">shoutrrr service documentation and examples</a>.</v-alert><div class="example-grid"><div class="example-card"><strong>SMTP</strong><span class="readonly-value">smtp://user:pass@mail.example.com:587/?from=nix@example.com&amp;to=ops@example.com</span></div><div class="example-card"><strong>Telegram</strong><span class="readonly-value">telegram://token@telegram?channels=123456789</span></div><div class="example-card"><strong>Matrix</strong><span class="readonly-value">matrix://user:pass@matrix.example.com/%23ops:matrix.example.com</span></div></div></v-card-text></v-card></v-col>
+            <v-col cols="12">
+              <v-card class="settings-card" rounded="xl">
+                <v-card-title>Notifications</v-card-title>
+                <v-card-subtitle>NixHostForge uses shoutrrr URLs. SMTP, Matrix, Telegram, and other shoutrrr services are supported.</v-card-subtitle>
+                <v-card-text>
+                  <v-form @submit.prevent="saveNotifications">
+                    <div v-for="(target, index) in settings.notificationUrls" :key="index" class="d-flex flex-column flex-md-row align-md-start ga-3 mb-3">
+                      <v-switch v-model="target.enabled" color="primary" label="Enabled" hide-details class="notification-enabled" />
+                      <v-text-field v-model="target.url" label="Notification URL" placeholder="smtp://user:pass@mail.example.com:587/?from=nix@example.com&to=ops@example.com" variant="outlined" class="flex-grow-1" />
+                      <div class="d-flex ga-2">
+                        <v-btn type="button" color="secondary" variant="tonal" :loading="saving.test === index + 1" @click="testNotification(index)">Test</v-btn>
+                        <v-btn type="button" icon="mdi-delete" variant="text" color="error" :aria-label="`Remove notification URL ${index + 1}`" @click="removeNotificationUrl(index)" />
+                      </div>
+                    </div>
+                    <div class="d-flex flex-wrap ga-3 mb-5">
+                      <v-btn type="button" variant="tonal" @click="addNotificationUrl">Add URL</v-btn>
+                      <v-btn type="submit" color="primary" :loading="saving.notifications">Save Notifications</v-btn>
+                    </div>
+                  </v-form>
+                  <v-alert color="info" variant="tonal" class="mb-4">Configure one shoutrrr URL per row. Disabled rows are saved but skipped for build failure notifications. See the <a href="https://containrrr.dev/shoutrrr/v0.8/services/overview/" target="_blank" rel="noreferrer">shoutrrr service documentation and examples</a>.</v-alert>
+                  <div class="example-grid"><div class="example-card"><strong>SMTP</strong><span class="readonly-value">smtp://user:pass@mail.example.com:587/?from=nix@example.com&amp;to=ops@example.com</span></div><div class="example-card"><strong>Telegram</strong><span class="readonly-value">telegram://token@telegram?channels=123456789</span></div><div class="example-card"><strong>Matrix</strong><span class="readonly-value">matrix://user:pass@matrix.example.com/%23ops:matrix.example.com</span></div></div>
+                </v-card-text>
+              </v-card>
+            </v-col>
           </v-row>
         </template>
       </div>

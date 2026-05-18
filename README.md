@@ -12,7 +12,7 @@ NixHostForge prebuilds and verifies NixOS host configurations from a flake. It w
 - Build history with logs and output paths.
 - Pause selector that stops currently running builds and prevents new builds for the selected number of hours.
 - First-use password setup and login sessions.
-- Failure notifications through shoutrrr.
+- Failure notifications through one or more shoutrrr URLs.
 - Avoids automatically rebuilding a failed host for the same commit.
 - Nix package, app, NixOS module, and devenv environment.
 
@@ -69,7 +69,7 @@ The web interface listens on all interfaces by default. `openFirewall` remains f
 
 ## Notifications
 
-NixHostForge uses shoutrrr notification URLs. Configure the URL in the web UI under Settings.
+NixHostForge uses shoutrrr notification URLs. Configure one or more URLs in the web UI under Settings. Each URL has its own enabled toggle and test button; disabled URLs are kept but skipped for build failure notifications.
 
 Examples:
 

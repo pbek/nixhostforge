@@ -11,9 +11,10 @@ import (
 )
 
 type settingsResponse struct {
-	Repository      settingsRepository `json:"repository"`
-	Scheduler       settingsScheduler  `json:"scheduler"`
-	NotificationURL string             `json:"notificationUrl"`
+	Repository       settingsRepository   `json:"repository"`
+	Scheduler        settingsScheduler    `json:"scheduler"`
+	NotificationURL  string               `json:"notificationUrl"`
+	NotificationURLs []notificationTarget `json:"notificationUrls"`
 }
 
 type settingsRepository struct {
@@ -41,7 +42,8 @@ type schedulerRequest struct {
 }
 
 type notificationRequest struct {
-	NotificationURL string `json:"notificationUrl"`
+	NotificationURL  string               `json:"notificationUrl"`
+	NotificationURLs []notificationTarget `json:"notificationUrls"`
 }
 
 type authRequest struct {
@@ -271,13 +273,17 @@ func (a *App) settings(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		default:
-			notificationURL := strings.TrimSpace(r.FormValue("notification_url"))
-			if err := a.store.SetSetting(r.Context(), "notification_url", notificationURL); err != nil {
+			notificationValue, err := encodeNotificationTargets([]notificationTarget{{URL: r.FormValue("notification_url"), Enabled: true}})
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if err := a.store.SetSetting(r.Context(), "notification_url", notificationValue); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 			if r.FormValue("action") == "test" {
-				if err := a.SendTestNotification(r.Context(), notificationURL); err != nil {
+				if err := a.SendTestNotification(r.Context(), notificationValue); err != nil {
 					http.Error(w, err.Error(), http.StatusBadRequest)
 					return
 				}
@@ -292,7 +298,12 @@ func (a *App) settings(w http.ResponseWriter, r *http.Request) {
 func (a *App) settingsData(ctx context.Context) settingsResponse {
 	repo := a.RepositoryConfig(ctx)
 	scheduler := a.SchedulerConfig(ctx)
-	notificationURL, _, _ := a.store.GetSetting(ctx, "notification_url")
+	notificationValue, _, _ := a.store.GetSetting(ctx, "notification_url")
+	targets := notificationTargets(notificationValue)
+	var notificationURLs []string
+	for _, target := range targets {
+		notificationURLs = append(notificationURLs, target.URL)
+	}
 	return settingsResponse{
 		Repository: settingsRepository{
 			Repository: repo.Repository,
@@ -306,7 +317,8 @@ func (a *App) settingsData(ctx context.Context) settingsResponse {
 			Concurrency:        scheduler.Concurrency,
 			ConcurrencyMutable: scheduler.ConcurrencyMutable,
 		},
-		NotificationURL: notificationURL,
+		NotificationURL:  strings.Join(notificationURLs, "\n"),
+		NotificationURLs: targets,
 	}
 }
 
@@ -363,8 +375,12 @@ func (a *App) apiSettingsNotifications(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, "invalid JSON body", http.StatusBadRequest)
 		return
 	}
-	notificationURL := strings.TrimSpace(req.NotificationURL)
-	if err := a.store.SetSetting(r.Context(), "notification_url", notificationURL); err != nil {
+	notificationValue, err := notificationValueFromRequest(req)
+	if err != nil {
+		writeJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := a.store.SetSetting(r.Context(), "notification_url", notificationValue); err != nil {
 		writeJSONError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -381,16 +397,23 @@ func (a *App) apiSettingsNotificationsTest(w http.ResponseWriter, r *http.Reques
 		writeJSONError(w, "invalid JSON body", http.StatusBadRequest)
 		return
 	}
-	notificationURL := strings.TrimSpace(req.NotificationURL)
-	if err := a.store.SetSetting(r.Context(), "notification_url", notificationURL); err != nil {
-		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+	notificationValue, err := notificationValueFromRequest(req)
+	if err != nil {
+		writeJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := a.SendTestNotification(r.Context(), notificationURL); err != nil {
+	if err := a.SendTestNotification(r.Context(), notificationValue); err != nil {
 		writeJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"message": "Test notification sent", "settings": a.settingsData(r.Context())})
+}
+
+func notificationValueFromRequest(req notificationRequest) (string, error) {
+	if req.NotificationURLs != nil {
+		return encodeNotificationTargets(req.NotificationURLs)
+	}
+	return encodeNotificationTargets([]notificationTarget{{URL: req.NotificationURL, Enabled: true}})
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
