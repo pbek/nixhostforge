@@ -1,1 +1,4 @@
 /.devenv
+/nixhostforge
+/frontend/node_modules
+/internal/app/settings/dist

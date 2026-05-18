@@ -15,26 +15,26 @@ type Store struct {
 }
 
 type Host struct {
-	Name        string
-	Enabled     bool
-	Discovered  time.Time
-	LastStatus  string
-	LastCommit  string
-	LastBuildID int64
+	Name        string    `json:"name"`
+	Enabled     bool      `json:"enabled"`
+	Discovered  time.Time `json:"discovered"`
+	LastStatus  string    `json:"lastStatus"`
+	LastCommit  string    `json:"lastCommit"`
+	LastBuildID int64     `json:"lastBuildId"`
 }
 
 type Build struct {
-	ID               int64
-	Host             string
-	CommitHash       string
-	Status           string
-	StartedAt        time.Time
-	FinishedAt       *time.Time
-	ExitCode         *int
-	OutputPath       string
-	Log              string
-	Manual           bool
-	NotificationSent bool
+	ID               int64      `json:"id"`
+	Host             string     `json:"host"`
+	CommitHash       string     `json:"commitHash"`
+	Status           string     `json:"status"`
+	StartedAt        time.Time  `json:"startedAt"`
+	FinishedAt       *time.Time `json:"finishedAt"`
+	ExitCode         *int       `json:"exitCode"`
+	OutputPath       string     `json:"outputPath"`
+	Log              string     `json:"log"`
+	Manual           bool       `json:"manual"`
+	NotificationSent bool       `json:"notificationSent"`
 }
 
 func OpenStore(path string) (*Store, error) {

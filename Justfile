@@ -1,3 +1,6 @@
+frontend-build:
+    npm --prefix frontend run build
+
 nix-build:
     nix build .#
 

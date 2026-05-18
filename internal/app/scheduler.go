@@ -20,11 +20,11 @@ type runningBuild struct {
 }
 
 type SchedulerStatus struct {
-	LastCommit    string
-	LastCheck     time.Time
-	LastError     string
-	RunningBuilds int
-	PausedUntil   *time.Time
+	LastCommit    string     `json:"lastCommit"`
+	LastCheck     time.Time  `json:"lastCheck"`
+	LastError     string     `json:"lastError"`
+	RunningBuilds int        `json:"runningBuilds"`
+	PausedUntil   *time.Time `json:"pausedUntil"`
 }
 
 func ShouldBuild(previous *Build, manual bool) bool {

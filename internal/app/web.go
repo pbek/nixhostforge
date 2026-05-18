@@ -1,12 +1,80 @@
 package app
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 )
+
+type settingsResponse struct {
+	Repository      settingsRepository `json:"repository"`
+	Scheduler       settingsScheduler  `json:"scheduler"`
+	NotificationURL string             `json:"notificationUrl"`
+}
+
+type settingsRepository struct {
+	Repository string `json:"repository"`
+	Branch     string `json:"branch"`
+	Mutable    bool   `json:"mutable"`
+	Configured bool   `json:"configured"`
+}
+
+type settingsScheduler struct {
+	Interval           string `json:"interval"`
+	IntervalMutable    bool   `json:"intervalMutable"`
+	Concurrency        int    `json:"concurrency"`
+	ConcurrencyMutable bool   `json:"concurrencyMutable"`
+}
+
+type repositoryRequest struct {
+	Repository string `json:"repository"`
+	Branch     string `json:"branch"`
+}
+
+type schedulerRequest struct {
+	Interval    string `json:"interval"`
+	Concurrency int    `json:"concurrency"`
+}
+
+type notificationRequest struct {
+	NotificationURL string `json:"notificationUrl"`
+}
+
+type authRequest struct {
+	Password string `json:"password"`
+	Confirm  string `json:"confirm"`
+}
+
+type authResponse struct {
+	HasAdmin      bool `json:"hasAdmin"`
+	Authenticated bool `json:"authenticated"`
+}
+
+type dashboardResponse struct {
+	Repository settingsRepository `json:"repository"`
+	Scheduler  settingsScheduler  `json:"scheduler"`
+	Status     SchedulerStatus    `json:"status"`
+	Hosts      []Host             `json:"hosts"`
+	Builds     []Build            `json:"builds"`
+	PauseHours []int              `json:"pauseHours"`
+}
+
+type hostToggleRequest struct {
+	Host    string `json:"host"`
+	Enabled bool   `json:"enabled"`
+}
+
+type hostBuildRequest struct {
+	Host string `json:"host"`
+}
+
+type pauseRequest struct {
+	Hours int `json:"hours"`
+}
 
 type pageData struct {
 	Title           string
@@ -26,6 +94,14 @@ func (a *App) setup(w http.ResponseWriter, r *http.Request) {
 	hasAdmin, err := a.hasAdmin(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if r.Method == http.MethodGet {
+		if hasAdmin {
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+		a.settingsApp(w, r)
 		return
 	}
 	if hasAdmin {
@@ -63,6 +139,14 @@ func (a *App) login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if r.Method == http.MethodGet {
+		if !hasAdmin {
+			http.Redirect(w, r, "/setup", http.StatusSeeOther)
+			return
+		}
+		a.settingsApp(w, r)
+		return
+	}
 	if !hasAdmin {
 		http.Redirect(w, r, "/setup", http.StatusSeeOther)
 		return
@@ -93,12 +177,20 @@ func (a *App) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) dashboard(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		a.settingsApp(w, r)
+		return
+	}
 	hosts, _ := a.store.Hosts(r.Context())
 	builds, _ := a.store.Builds(r.Context(), 8)
 	a.render(w, r, "dashboard", pageData{Title: "Dashboard", Config: a.cfg, Repo: a.RepositoryConfig(r.Context()), Scheduler: a.SchedulerConfig(r.Context()), Status: a.Status(r.Context()), Hosts: hosts, Builds: builds, PauseHours: []int{1, 2, 4, 8, 12, 24}})
 }
 
 func (a *App) hosts(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		a.settingsApp(w, r)
+		return
+	}
 	hosts, err := a.store.Hosts(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -133,6 +225,10 @@ func (a *App) buildHost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) builds(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		a.settingsApp(w, r)
+		return
+	}
 	builds, err := a.store.Builds(r.Context(), 100)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -142,6 +238,10 @@ func (a *App) builds(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) buildDetail(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		a.settingsApp(w, r)
+		return
+	}
 	idText := strings.TrimPrefix(r.URL.Path, "/builds/")
 	id, err := strconv.ParseInt(idText, 10, 64)
 	if err != nil {
@@ -186,8 +286,354 @@ func (a *App) settings(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/settings", http.StatusSeeOther)
 		return
 	}
-	notificationURL, _, _ := a.store.GetSetting(r.Context(), "notification_url")
-	a.render(w, r, "settings", pageData{Title: "Settings", Config: a.cfg, Repo: a.RepositoryConfig(r.Context()), Scheduler: a.SchedulerConfig(r.Context()), Status: a.Status(r.Context()), NotificationURL: notificationURL, PauseHours: []int{1, 2, 4, 8, 12, 24}})
+	a.settingsApp(w, r)
+}
+
+func (a *App) settingsData(ctx context.Context) settingsResponse {
+	repo := a.RepositoryConfig(ctx)
+	scheduler := a.SchedulerConfig(ctx)
+	notificationURL, _, _ := a.store.GetSetting(ctx, "notification_url")
+	return settingsResponse{
+		Repository: settingsRepository{
+			Repository: repo.Repository,
+			Branch:     repo.Branch,
+			Mutable:    repo.Mutable,
+			Configured: repo.Configured,
+		},
+		Scheduler: settingsScheduler{
+			Interval:           scheduler.Interval.String(),
+			IntervalMutable:    scheduler.IntervalMutable,
+			Concurrency:        scheduler.Concurrency,
+			ConcurrencyMutable: scheduler.ConcurrencyMutable,
+		},
+		NotificationURL: notificationURL,
+	}
+}
+
+func (a *App) apiSettings(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.settingsData(r.Context()))
+}
+
+func (a *App) apiSettingsRepository(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req repositoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	if err := a.SaveRepositoryConfig(r.Context(), req.Repository, req.Branch); err != nil {
+		writeJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	a.TriggerCheck(r.Context())
+	writeJSON(w, http.StatusOK, a.settingsData(r.Context()))
+}
+
+func (a *App) apiSettingsScheduler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req schedulerRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	if err := a.SaveSchedulerConfig(r.Context(), req.Interval, strconv.Itoa(req.Concurrency)); err != nil {
+		writeJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.settingsData(r.Context()))
+}
+
+func (a *App) apiSettingsNotifications(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req notificationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	notificationURL := strings.TrimSpace(req.NotificationURL)
+	if err := a.store.SetSetting(r.Context(), "notification_url", notificationURL); err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.settingsData(r.Context()))
+}
+
+func (a *App) apiSettingsNotificationsTest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req notificationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	notificationURL := strings.TrimSpace(req.NotificationURL)
+	if err := a.store.SetSetting(r.Context(), "notification_url", notificationURL); err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := a.SendTestNotification(r.Context(), notificationURL); err != nil {
+		writeJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"message": "Test notification sent", "settings": a.settingsData(r.Context())})
+}
+
+func writeJSON(w http.ResponseWriter, status int, value any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(value)
+}
+
+func writeJSONError(w http.ResponseWriter, message string, status int) {
+	writeJSON(w, status, map[string]string{"error": message})
+}
+
+func (a *App) apiAuth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	hasAdmin, err := a.hasAdmin(r.Context())
+	if err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, authResponse{HasAdmin: hasAdmin, Authenticated: hasAdmin && a.authenticated(r)})
+}
+
+func (a *App) apiSetup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	hasAdmin, err := a.hasAdmin(r.Context())
+	if err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if hasAdmin {
+		writeJSONError(w, "admin user already exists", http.StatusBadRequest)
+		return
+	}
+	var req authRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	if len(req.Password) < 10 {
+		writeJSONError(w, "password must be at least 10 characters", http.StatusBadRequest)
+		return
+	}
+	if req.Password != req.Confirm {
+		writeJSONError(w, "passwords do not match", http.StatusBadRequest)
+		return
+	}
+	if err := a.setAdminPassword(r.Context(), req.Password); err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := a.createSession(r.Context(), w); err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, authResponse{HasAdmin: true, Authenticated: true})
+}
+
+func (a *App) apiLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req authRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	ok, err := a.verifyAdminPassword(r.Context(), req.Password)
+	if err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		writeJSONError(w, "invalid password", http.StatusUnauthorized)
+		return
+	}
+	if err := a.createSession(r.Context(), w); err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, authResponse{HasAdmin: true, Authenticated: true})
+}
+
+func (a *App) dashboardData(ctx context.Context, buildLimit int) (dashboardResponse, error) {
+	hosts, err := a.store.Hosts(ctx)
+	if err != nil {
+		return dashboardResponse{}, err
+	}
+	builds, err := a.store.Builds(ctx, buildLimit)
+	if err != nil {
+		return dashboardResponse{}, err
+	}
+	settings := a.settingsData(ctx)
+	return dashboardResponse{Repository: settings.Repository, Scheduler: settings.Scheduler, Status: a.Status(ctx), Hosts: hosts, Builds: builds, PauseHours: []int{1, 2, 4, 8, 12, 24}}, nil
+}
+
+func (a *App) apiDashboard(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	data, err := a.dashboardData(r.Context(), 8)
+	if err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, data)
+}
+
+func (a *App) apiHosts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	hosts, err := a.store.Hosts(r.Context())
+	if err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"hosts": hosts})
+}
+
+func (a *App) apiHostsToggle(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req hostToggleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	if err := a.store.SetHostEnabled(r.Context(), req.Host, req.Enabled); err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	hosts, err := a.store.Hosts(r.Context())
+	if err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"hosts": hosts})
+}
+
+func (a *App) apiHostsBuild(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req hostBuildRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	if err := a.ManualBuild(r.Context(), req.Host); err != nil {
+		writeJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "build started"})
+}
+
+func (a *App) apiBuilds(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	builds, err := a.store.Builds(r.Context(), 100)
+	if err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"builds": builds})
+}
+
+func (a *App) apiBuild(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	idText := strings.TrimPrefix(r.URL.Path, "/api/builds/")
+	id, err := strconv.ParseInt(idText, 10, 64)
+	if err != nil {
+		writeJSONError(w, "invalid build id", http.StatusBadRequest)
+		return
+	}
+	build, err := a.store.Build(r.Context(), id)
+	if err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if build == nil {
+		writeJSONError(w, "build not found", http.StatusNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"build": build})
+}
+
+func (a *App) apiCheckNow(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	a.TriggerCheck(r.Context())
+	writeJSON(w, http.StatusOK, map[string]string{"message": "check started"})
+}
+
+func (a *App) apiPause(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req pauseRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	if req.Hours < 1 || req.Hours > 168 {
+		writeJSONError(w, "hours must be between 1 and 168", http.StatusBadRequest)
+		return
+	}
+	if err := a.Pause(r.Context(), time.Duration(req.Hours)*time.Hour); err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": a.Status(r.Context())})
+}
+
+func (a *App) apiResume(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := a.Resume(r.Context()); err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": a.Status(r.Context())})
 }
 
 func (a *App) pause(w http.ResponseWriter, r *http.Request) {
