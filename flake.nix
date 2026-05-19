@@ -41,6 +41,7 @@
             version = "0.1.0";
             src = ./.;
             vendorHash = "sha256-Rg1jVL6Uq0iQmj/uWox78eXAdRWGPEVAktMOjL6uygI=";
+            tags = [ "embed_settings" ];
             nativeBuildInputs = [ pkgs.makeWrapper ];
             postPatch = ''
               rm -rf internal/app/settings/dist

@@ -1,3 +1,5 @@
+//go:build embed_settings
+
 package app
 
 import (

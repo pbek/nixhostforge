@@ -1,7 +1,6 @@
 /nixhostforge
 /frontend/node_modules
-/internal/app/settings/dist/*
-!/internal/app/settings/dist/index.html
+/internal/app/settings/dist/
 .shared
 
 # Devenv
