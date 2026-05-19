@@ -63,6 +63,16 @@ func (a *App) currentCommit(ctx context.Context, repoDir string) (string, error)
 	return strings.TrimSpace(string(out)), nil
 }
 
+func (a *App) currentCommitMessage(ctx context.Context, repoDir string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", "log", "-1", "--pretty=%s")
+	cmd.Dir = repoDir
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 func (a *App) discoverHosts(ctx context.Context, repoDir string) ([]string, error) {
 	cmd := exec.CommandContext(
 		ctx,

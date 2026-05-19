@@ -175,6 +175,16 @@ a:hover {
   letter-spacing: -0.04em;
 }
 
+.stat-detail {
+  margin-top: 0.35rem;
+  overflow: hidden;
+  color: var(--muted-strong);
+  font-size: 0.9rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .auth-shell {
   display: grid;
   min-height: 100vh;

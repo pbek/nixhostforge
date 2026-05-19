@@ -21,11 +21,12 @@ type runningBuild struct {
 }
 
 type SchedulerStatus struct {
-	LastCommit    string     `json:"lastCommit"`
-	LastCheck     time.Time  `json:"lastCheck"`
-	LastError     string     `json:"lastError"`
-	RunningBuilds int        `json:"runningBuilds"`
-	PausedUntil   *time.Time `json:"pausedUntil"`
+	LastCommit        string     `json:"lastCommit"`
+	LastCommitMessage string     `json:"lastCommitMessage"`
+	LastCheck         time.Time  `json:"lastCheck"`
+	LastError         string     `json:"lastError"`
+	RunningBuilds     int        `json:"runningBuilds"`
+	PausedUntil       *time.Time `json:"pausedUntil"`
 }
 
 type notificationTarget struct {
@@ -76,6 +77,7 @@ func (a *App) checkOnce(ctx context.Context) {
 	if paused, until := a.paused(ctx); paused {
 		a.setStatus(
 			"",
+			"",
 			time.Now().UTC(),
 			fmt.Sprintf("paused until %s", until.Format(time.RFC3339)),
 		)
@@ -83,27 +85,33 @@ func (a *App) checkOnce(ctx context.Context) {
 	}
 	repoDir, err := a.ensureRepo(ctx)
 	if err != nil {
-		a.setStatus("", time.Now().UTC(), err.Error())
+		a.setStatus("", "", time.Now().UTC(), err.Error())
 		log.Printf("repo check failed: %v", err)
 		return
 	}
 	commit, err := a.currentCommit(ctx, repoDir)
 	if err != nil {
-		a.setStatus("", time.Now().UTC(), err.Error())
+		a.setStatus("", "", time.Now().UTC(), err.Error())
 		log.Printf("commit check failed: %v", err)
+		return
+	}
+	commitMessage, err := a.currentCommitMessage(ctx, repoDir)
+	if err != nil {
+		a.setStatus(commit, "", time.Now().UTC(), err.Error())
+		log.Printf("commit message check failed: %v", err)
 		return
 	}
 	hosts, err := a.discoverHosts(ctx, repoDir)
 	if err != nil {
-		a.setStatus(commit, time.Now().UTC(), err.Error())
+		a.setStatus(commit, commitMessage, time.Now().UTC(), err.Error())
 		log.Printf("host discovery failed: %v", err)
 		return
 	}
 	if err := a.store.UpsertHosts(ctx, hosts); err != nil {
-		a.setStatus(commit, time.Now().UTC(), err.Error())
+		a.setStatus(commit, commitMessage, time.Now().UTC(), err.Error())
 		return
 	}
-	a.setStatus(commit, time.Now().UTC(), "")
+	a.setStatus(commit, commitMessage, time.Now().UTC(), "")
 
 	enabled, err := a.store.EnabledHosts(ctx)
 	if err != nil {
@@ -224,6 +232,10 @@ func (a *App) ManualBuildEnabledHosts(ctx context.Context) (int, string, error) 
 	if err != nil {
 		return 0, "", err
 	}
+	commitMessage, err := a.currentCommitMessage(ctx, repoDir)
+	if err != nil {
+		return 0, commit, err
+	}
 	hosts, err := a.discoverHosts(ctx, repoDir)
 	if err != nil {
 		return 0, commit, err
@@ -231,7 +243,7 @@ func (a *App) ManualBuildEnabledHosts(ctx context.Context) (int, string, error) 
 	if err := a.store.UpsertHosts(ctx, hosts); err != nil {
 		return 0, commit, err
 	}
-	a.setStatus(commit, time.Now().UTC(), "")
+	a.setStatus(commit, commitMessage, time.Now().UTC(), "")
 	enabled, err := a.store.EnabledHosts(ctx)
 	if err != nil {
 		return 0, commit, err
@@ -305,11 +317,12 @@ func (a *App) paused(ctx context.Context) (bool, time.Time) {
 	return false, time.Time{}
 }
 
-func (a *App) setStatus(commit string, checked time.Time, lastErr string) {
+func (a *App) setStatus(commit, commitMessage string, checked time.Time, lastErr string) {
 	a.statusMu.Lock()
 	defer a.statusMu.Unlock()
 	if commit != "" {
 		a.status.LastCommit = commit
+		a.status.LastCommitMessage = commitMessage
 	}
 	a.status.LastCheck = checked
 	a.status.LastError = lastErr

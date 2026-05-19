@@ -4,6 +4,7 @@
 
 ### Added
 
+- Show the current commit message on the dashboard.
 - Added a dashboard button to manually build all enabled hosts at the current repository commit.
 - Added per-notification URL checkboxes for success messages, warnings, and errors.
 

@@ -258,7 +258,7 @@ func (a *App) SaveRepositoryConfig(ctx context.Context, repository, branch strin
 	if previous.Repository != repository || previous.Branch != branch {
 		a.CancelRunning("repository changed")
 		_ = os.RemoveAll(filepath.Join(a.cfg.StateDir, "repo"))
-		a.setStatus("", time.Now().UTC(), "repository changed; waiting for next check")
+		a.setStatus("", "", time.Now().UTC(), "repository changed; waiting for next check")
 	}
 	return nil
 }

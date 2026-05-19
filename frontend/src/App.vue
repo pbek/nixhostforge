@@ -547,6 +547,12 @@ onUnmounted(() => window.removeEventListener("popstate", onPopState));
                   ><div class="stat-label">Latest commit</div>
                   <div class="stat-value">
                     {{ shortCommit(dashboard.status.lastCommit) }}
+                  </div>
+                  <div
+                    v-if="dashboard.status.lastCommitMessage"
+                    class="stat-detail"
+                  >
+                    {{ dashboard.status.lastCommitMessage }}
                   </div></v-card-text
                 ></v-card
               ></v-col
