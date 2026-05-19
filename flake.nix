@@ -8,6 +8,7 @@
   outputs =
     { self, nixpkgs }:
     let
+      version = "0.3.0";
       systems = [
         "aarch64-darwin"
         "aarch64-linux"
@@ -23,10 +24,11 @@
           pkgs = import nixpkgs { inherit system; };
           settingsFrontend = pkgs.buildNpmPackage {
             pname = "nixhostforge-settings";
-            version = "0.3.0";
+            inherit version;
             src = ./frontend;
             npmDepsHash = "sha256-dPcSqDufxIGokVzq//P0dcPucZBIzdKWRVPpd4u39RE=";
             VITE_OUT_DIR = "dist";
+            VITE_NIXHOSTFORGE_VERSION = version;
             installPhase = ''
               runHook preInstall
               mkdir -p $out
@@ -38,7 +40,7 @@
         {
           default = pkgs.buildGoModule {
             pname = "nixhostforge";
-            version = "0.3.0";
+            inherit version;
             src = ./.;
             vendorHash = "sha256-Rg1jVL6Uq0iQmj/uWox78eXAdRWGPEVAktMOjL6uygI=";
             tags = [ "embed_settings" ];

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+### Added
+
+- Show the application version in the web menu.
+
 ## 0.2.0
 
 ### Added

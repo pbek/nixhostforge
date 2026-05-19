@@ -87,6 +87,17 @@ a:hover {
   box-shadow: 0 0 24px rgba(139, 92, 246, 0.72);
 }
 
+.settings-version {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 999px;
+  padding: 0.08rem 0.38rem;
+  background: rgba(15, 23, 42, 0.78);
+  color: var(--muted-strong);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
 .settings-nav a:not(.settings-brand) {
   border: 1px solid transparent;
   border-radius: 999px;

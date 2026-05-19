@@ -41,6 +41,7 @@ const settings = reactive({
   },
   notificationUrls: [{ url: "", enabled: true }],
 });
+const appVersion = import.meta.env.VITE_NIXHOSTFORGE_VERSION || "dev";
 
 const authenticatedPage = computed(
   () => !["/login", "/setup"].includes(path.value),
@@ -401,7 +402,7 @@ onUnmounted(() => window.removeEventListener("popstate", onPopState));
   <v-app>
     <nav v-if="authenticatedPage" class="settings-nav">
       <a class="settings-brand" href="/" @click.prevent="navigate('/')"
-        >NixHostForge</a
+        >NixHostForge <span class="settings-version">v{{ appVersion }}</span></a
       >
       <a
         href="/hosts"
