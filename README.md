@@ -2,6 +2,8 @@
 
 NixHostForge prebuilds and verifies NixOS host configurations from a flake. It watches a Git repository, discovers `nixosConfigurations`, builds selected hosts, records the results, and notifies you when a host configuration fails before the host needs to build it.
 
+![NixHostForge dashboard](./nixhostforge.webp)
+
 ## Features
 
 - Periodically checks a configured Git repository and branch.
