@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+
+### Fixed
+
+- Set the browser page title to the active page name.
+
 ## 0.3.0
 
 ### Added

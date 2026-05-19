@@ -1,5 +1,12 @@
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
+import {
+  computed,
+  onMounted,
+  onUnmounted,
+  reactive,
+  ref,
+  watchEffect,
+} from "vue";
 import BuildTable from "./BuildTable.vue";
 import PageTitle from "./PageTitle.vue";
 
@@ -53,6 +60,18 @@ const schedulerMutable = computed(
   () =>
     settings.scheduler.intervalMutable || settings.scheduler.concurrencyMutable,
 );
+const pageName = computed(() => {
+  if (path.value === "/setup") return "Setup";
+  if (path.value === "/login") return "Login";
+  if (path.value === "/") return "Dashboard";
+  if (path.value === "/hosts") return "Hosts";
+  if (path.value === "/builds") return "Builds";
+  if (path.value.startsWith("/builds/")) {
+    return currentBuildId.value ? `Build #${currentBuildId.value}` : "Build";
+  }
+  if (path.value === "/settings") return "Settings";
+  return "NixHostForge";
+});
 
 function shortCommit(value) {
   return value ? value.slice(0, 12) : "unknown";
@@ -396,6 +415,12 @@ onMounted(() => {
   loadPage();
 });
 onUnmounted(() => window.removeEventListener("popstate", onPopState));
+watchEffect(() => {
+  document.title =
+    pageName.value === "NixHostForge"
+      ? "NixHostForge"
+      : `${pageName.value} - NixHostForge`;
+});
 </script>
 
 <template>
