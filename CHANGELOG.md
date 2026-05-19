@@ -9,6 +9,7 @@
 ### Fixed
 
 - Fixed the dashboard `Check now` button so decorative hero-card styling no longer blocks clicks.
+- Centered the notification settings `Test` button vertically with the URL input.
 
 ## 0.1.0
 

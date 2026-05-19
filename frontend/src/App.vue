@@ -862,7 +862,7 @@ onUnmounted(() => window.removeEventListener("popstate", onPopState));
                     <div
                       v-for="(target, index) in settings.notificationUrls"
                       :key="index"
-                      class="d-flex flex-column flex-md-row align-md-start ga-3 mb-3"
+                      class="d-flex flex-column flex-md-row align-md-center ga-3 mb-3"
                     >
                       <v-switch
                         v-model="target.enabled"
@@ -876,9 +876,10 @@ onUnmounted(() => window.removeEventListener("popstate", onPopState));
                         label="Notification URL"
                         placeholder="smtp://user:pass@mail.example.com:587/?from=nix@example.com&to=ops@example.com"
                         variant="outlined"
+                        hide-details
                         class="flex-grow-1"
                       />
-                      <div class="d-flex ga-2">
+                      <div class="notification-actions d-flex ga-2">
                         <v-btn
                           type="button"
                           color="secondary"

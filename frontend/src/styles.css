@@ -296,6 +296,11 @@ a:hover {
   margin-inline-end: 0.25rem;
 }
 
+.notification-actions {
+  align-items: center;
+  min-height: 56px;
+}
+
 .example-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
