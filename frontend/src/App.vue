@@ -630,7 +630,13 @@ onUnmounted(() => window.removeEventListener("popstate", onPopState));
                     ><v-card-text
                       ><div class="text-h6">{{ host.name }}</div>
                       <div class="text-medium-emphasis">
-                        Last: {{ host.lastStatus || "no build" }}
+                        Last:
+                        {{ host.lastStatus || "no build" }}
+                        {{
+                          host.lastStatus
+                            ? `at ${formatDate(host.lastBuildAt)}`
+                            : ""
+                        }}
                       </div></v-card-text
                     ></v-card
                   ></v-col

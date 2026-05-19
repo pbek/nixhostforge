@@ -4,6 +4,7 @@
 
 ### Added
 
+- Show each host's last build time on the dashboard.
 - Show the application version in the web menu.
 
 ### Fixed

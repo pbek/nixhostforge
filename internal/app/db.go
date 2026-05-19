@@ -21,6 +21,7 @@ type Host struct {
 	LastStatus  string    `json:"lastStatus"`
 	LastCommit  string    `json:"lastCommit"`
 	LastBuildID int64     `json:"lastBuildId"`
+	LastBuildAt time.Time `json:"lastBuildAt"`
 }
 
 type Build struct {
@@ -111,7 +112,7 @@ func (s *Store) UpsertHosts(ctx context.Context, names []string) error {
 func (s *Store) Hosts(ctx context.Context) ([]Host, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		select h.name, h.enabled, h.discovered_at,
-		       coalesce(b.status, ''), coalesce(b.commit_hash, ''), coalesce(b.id, 0)
+		       coalesce(b.status, ''), coalesce(b.commit_hash, ''), coalesce(b.id, 0), b.started_at
 		from hosts h
 		left join builds b on b.id = (select id from builds where host = h.name order by started_at desc limit 1)
 		order by h.name`)
@@ -124,11 +125,15 @@ func (s *Store) Hosts(ctx context.Context) ([]Host, error) {
 		var h Host
 		var enabled int
 		var discovered string
-		if err := rows.Scan(&h.Name, &enabled, &discovered, &h.LastStatus, &h.LastCommit, &h.LastBuildID); err != nil {
+		var lastBuildAt sql.NullString
+		if err := rows.Scan(&h.Name, &enabled, &discovered, &h.LastStatus, &h.LastCommit, &h.LastBuildID, &lastBuildAt); err != nil {
 			return nil, err
 		}
 		h.Enabled = enabled == 1
 		h.Discovered, _ = time.Parse(time.RFC3339Nano, discovered)
+		if lastBuildAt.Valid {
+			h.LastBuildAt, _ = time.Parse(time.RFC3339Nano, lastBuildAt.String)
+		}
 		hosts = append(hosts, h)
 	}
 	return hosts, rows.Err()
