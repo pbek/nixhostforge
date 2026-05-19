@@ -42,8 +42,8 @@ func TestNotificationTargetsFromLegacyLines(t *testing.T) {
 		"\n smtp://one.example.test \n\ntelegram://token@telegram?channels=1\r\n",
 	)
 	want := []notificationTarget{
-		{URL: "smtp://one.example.test", Enabled: true},
-		{URL: "telegram://token@telegram?channels=1", Enabled: true},
+		{URL: "smtp://one.example.test", Enabled: true, Errors: true},
+		{URL: "telegram://token@telegram?channels=1", Enabled: true, Errors: true},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %v, want %v", got, want)
@@ -60,8 +60,8 @@ func TestNotificationTargetsFromJSON(t *testing.T) {
 		`[{"url":"smtp://one.example.test","enabled":true},{"url":"telegram://token@telegram?channels=1","enabled":false}]`,
 	)
 	want := []notificationTarget{
-		{URL: "smtp://one.example.test", Enabled: true},
-		{URL: "telegram://token@telegram?channels=1", Enabled: false},
+		{URL: "smtp://one.example.test", Enabled: true, Errors: true},
+		{URL: "telegram://token@telegram?channels=1", Enabled: false, Errors: true},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %v, want %v", got, want)
@@ -70,6 +70,31 @@ func TestNotificationTargetsFromJSON(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("got %v, want %v", got, want)
 		}
+	}
+}
+
+func TestNotificationURLsForStatus(t *testing.T) {
+	value := `[{"url":"smtp://one.example.test","enabled":true,"success":true,"warnings":false,"errors":true},{"url":"telegram://token@telegram?channels=1","enabled":true,"success":false,"warnings":true,"errors":false},{"url":"matrix://example.test","enabled":false,"success":true,"warnings":true,"errors":true}]`
+	tests := []struct {
+		status string
+		want   []string
+	}{
+		{status: "success", want: []string{"smtp://one.example.test"}},
+		{status: "cancelled", want: []string{"telegram://token@telegram?channels=1"}},
+		{status: "failed", want: []string{"smtp://one.example.test"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.status, func(t *testing.T) {
+			got := notificationURLsForStatus(value, tt.status)
+			if len(got) != len(tt.want) {
+				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+			for i := range tt.want {
+				if got[i] != tt.want[i] {
+					t.Fatalf("got %v, want %v", got, tt.want)
+				}
+			}
+		})
 	}
 }
 

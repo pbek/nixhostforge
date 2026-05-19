@@ -325,7 +325,7 @@ func (a *App) settings(w http.ResponseWriter, r *http.Request) {
 			}
 		default:
 			notificationValue, err := encodeNotificationTargets(
-				[]notificationTarget{{URL: r.FormValue("notification_url"), Enabled: true}},
+				[]notificationTarget{defaultNotificationTarget(r.FormValue("notification_url"))},
 			)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -469,7 +469,7 @@ func notificationValueFromRequest(req notificationRequest) (string, error) {
 		return encodeNotificationTargets(req.NotificationURLs)
 	}
 	return encodeNotificationTargets(
-		[]notificationTarget{{URL: req.NotificationURL, Enabled: true}},
+		[]notificationTarget{defaultNotificationTarget(req.NotificationURL)},
 	)
 }
 

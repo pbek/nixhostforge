@@ -29,8 +29,11 @@ type SchedulerStatus struct {
 }
 
 type notificationTarget struct {
-	URL     string `json:"url"`
-	Enabled bool   `json:"enabled"`
+	URL      string `json:"url"`
+	Enabled  bool   `json:"enabled"`
+	Success  bool   `json:"success"`
+	Warnings bool   `json:"warnings"`
+	Errors   bool   `json:"errors"`
 }
 
 func ShouldBuild(previous *Build, manual bool) bool {
@@ -189,8 +192,13 @@ func (a *App) runBuild(ctx context.Context, repoDir, host, commit string, manual
 	if err := a.store.FinishBuild(context.Background(), id, status, exitCode, outputPath, logText); err != nil {
 		log.Printf("finish build: %v", err)
 	}
-	if status == "failed" {
-		a.notifyFailure(context.Background(), id, host, commit, logText)
+	switch status {
+	case "success":
+		a.notifyBuildResult(context.Background(), id, host, commit, status)
+	case "cancelled":
+		a.notifyBuildResult(context.Background(), id, host, commit, status)
+	case "failed":
+		a.notifyBuildResult(context.Background(), id, host, commit, status)
 	}
 }
 
@@ -320,9 +328,9 @@ func (a *App) Status(ctx context.Context) SchedulerStatus {
 	return status
 }
 
-func (a *App) notifyFailure(ctx context.Context, id int64, host, commit, logText string) {
+func (a *App) notifyBuildResult(ctx context.Context, id int64, host, commit, status string) {
 	value, ok, err := a.store.GetSetting(ctx, "notification_url")
-	urls := enabledNotificationURLs(value)
+	urls := notificationURLsForStatus(value, status)
 	if err != nil || !ok || len(urls) == 0 {
 		return
 	}
@@ -331,8 +339,17 @@ func (a *App) notifyFailure(ctx context.Context, id int64, host, commit, logText
 		shortCommit = shortCommit[:12]
 	}
 	repoConfig := a.RepositoryConfig(ctx)
+	title := map[string]string{
+		"success":   "NixHostForge build succeeded",
+		"cancelled": "NixHostForge build cancelled",
+		"failed":    "NixHostForge build failed",
+	}[status]
+	if title == "" {
+		title = "NixHostForge build update"
+	}
 	message := fmt.Sprintf(
-		"NixHostForge build failed\n\nHost: %s\nCommit: %s\nRepository: %s\n\nOpen NixHostForge for the full build log.",
+		"%s\n\nHost: %s\nCommit: %s\nRepository: %s\n\nOpen NixHostForge for the full build log.",
+		title,
 		host,
 		shortCommit,
 		repoConfig.Repository,
@@ -358,8 +375,11 @@ func notificationTargets(value string) []notificationTarget {
 
 	if strings.HasPrefix(value, "[") {
 		var raw []struct {
-			URL     string `json:"url"`
-			Enabled *bool  `json:"enabled"`
+			URL      string `json:"url"`
+			Enabled  *bool  `json:"enabled"`
+			Success  *bool  `json:"success"`
+			Warnings *bool  `json:"warnings"`
+			Errors   *bool  `json:"errors"`
 		}
 		if err := json.Unmarshal([]byte(value), &raw); err == nil {
 			var targets []notificationTarget
@@ -372,7 +392,16 @@ func notificationTargets(value string) []notificationTarget {
 				if target.Enabled != nil {
 					enabled = *target.Enabled
 				}
-				targets = append(targets, notificationTarget{URL: url, Enabled: enabled})
+				targets = append(
+					targets,
+					notificationTarget{
+						URL:      url,
+						Enabled:  enabled,
+						Success:  boolValue(target.Success, false),
+						Warnings: boolValue(target.Warnings, false),
+						Errors:   boolValue(target.Errors, true),
+					},
+				)
 			}
 			return targets
 		}
@@ -382,10 +411,21 @@ func notificationTargets(value string) []notificationTarget {
 	for _, line := range strings.FieldsFunc(value, func(r rune) bool { return r == '\n' || r == '\r' }) {
 		url := strings.TrimSpace(line)
 		if url != "" {
-			targets = append(targets, notificationTarget{URL: url, Enabled: true})
+			targets = append(targets, defaultNotificationTarget(url))
 		}
 	}
 	return targets
+}
+
+func boolValue(value *bool, fallback bool) bool {
+	if value == nil {
+		return fallback
+	}
+	return *value
+}
+
+func defaultNotificationTarget(url string) notificationTarget {
+	return notificationTarget{URL: url, Enabled: true, Errors: true}
 }
 
 func normalizeNotificationTargets(targets []notificationTarget) []notificationTarget {
@@ -393,7 +433,13 @@ func normalizeNotificationTargets(targets []notificationTarget) []notificationTa
 	for _, target := range targets {
 		url := strings.TrimSpace(target.URL)
 		if url != "" {
-			normalized = append(normalized, notificationTarget{URL: url, Enabled: target.Enabled})
+			normalized = append(normalized, notificationTarget{
+				URL:      url,
+				Enabled:  target.Enabled,
+				Success:  target.Success,
+				Warnings: target.Warnings,
+				Errors:   target.Errors,
+			})
 		}
 	}
 	return normalized
@@ -415,6 +461,25 @@ func enabledNotificationURLs(value string) []string {
 	var urls []string
 	for _, target := range notificationTargets(value) {
 		if target.Enabled {
+			urls = append(urls, target.URL)
+		}
+	}
+	return urls
+}
+
+func notificationURLsForStatus(value, status string) []string {
+	var urls []string
+	for _, target := range notificationTargets(value) {
+		if !target.Enabled {
+			continue
+		}
+		if status == "success" && target.Success {
+			urls = append(urls, target.URL)
+		}
+		if status == "cancelled" && target.Warnings {
+			urls = append(urls, target.URL)
+		}
+		if status == "failed" && target.Errors {
 			urls = append(urls, target.URL)
 		}
 	}

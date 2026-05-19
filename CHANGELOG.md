@@ -5,6 +5,7 @@
 ### Added
 
 - Added a dashboard button to manually build all enabled hosts at the current repository commit.
+- Added per-notification URL checkboxes for success messages, warnings, and errors.
 
 ### Fixed
 

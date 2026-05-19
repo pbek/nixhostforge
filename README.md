@@ -69,7 +69,7 @@ The web interface listens on all interfaces by default. `openFirewall` remains f
 
 ## Notifications
 
-NixHostForge uses shoutrrr notification URLs. Configure one or more URLs in the web UI under Settings. Each URL has its own enabled toggle and test button; disabled URLs are kept but skipped for build failure notifications.
+NixHostForge uses shoutrrr notification URLs. Configure one or more URLs in the web UI under Settings. Each URL has its own enabled toggle, test button, and checkboxes for success messages, warnings, and errors; disabled URLs are kept but skipped for notifications.
 
 Examples:
 

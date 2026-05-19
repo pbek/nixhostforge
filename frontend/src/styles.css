@@ -296,6 +296,10 @@ a:hover {
   margin-inline-end: 0.25rem;
 }
 
+.notification-levels {
+  min-width: min(100%, 28rem);
+}
+
 .notification-actions {
   align-items: center;
   min-height: 56px;

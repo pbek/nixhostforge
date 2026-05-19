@@ -83,7 +83,13 @@ function notify(message, color = "success") {
 }
 
 function newNotificationUrl() {
-  return { url: "", enabled: true };
+  return {
+    url: "",
+    enabled: true,
+    success: false,
+    warnings: false,
+    errors: true,
+  };
 }
 
 function applySettings(next) {
@@ -94,11 +100,14 @@ function applySettings(next) {
     : (next.notificationUrl || "")
         .split(/\r?\n/)
         .filter(Boolean)
-        .map((url) => ({ url, enabled: true }));
+        .map((url) => ({ url, enabled: true, errors: true }));
   settings.notificationUrls = targets.length
     ? targets.map((target) => ({
         url: target.url || "",
         enabled: target.enabled !== false,
+        success: target.success === true,
+        warnings: target.warnings === true,
+        errors: target.errors !== false,
       }))
     : [newNotificationUrl()];
 }
@@ -879,6 +888,26 @@ onUnmounted(() => window.removeEventListener("popstate", onPopState));
                         hide-details
                         class="flex-grow-1"
                       />
+                      <div class="notification-levels d-flex flex-wrap ga-2">
+                        <v-switch
+                          v-model="target.success"
+                          color="success"
+                          label="Success messages"
+                          hide-details
+                        />
+                        <v-switch
+                          v-model="target.warnings"
+                          color="warning"
+                          label="Warnings"
+                          hide-details
+                        />
+                        <v-switch
+                          v-model="target.errors"
+                          color="error"
+                          label="Errors"
+                          hide-details
+                        />
+                      </div>
                       <div class="notification-actions d-flex ga-2">
                         <v-btn
                           type="button"
@@ -915,7 +944,9 @@ onUnmounted(() => window.removeEventListener("popstate", onPopState));
                   </v-form>
                   <v-alert color="info" variant="tonal" class="mb-4"
                     >Configure one shoutrrr URL per row. Disabled rows are saved
-                    but skipped for build failure notifications. See the
+                    but skipped for notifications. Success messages are sent for
+                    successful builds, warnings for cancelled builds, and errors
+                    for failed builds. See the
                     <a
                       href="https://containrrr.dev/shoutrrr/v0.8/services/overview/"
                       target="_blank"
