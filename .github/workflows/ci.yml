@@ -1,0 +1,55 @@
+name: "🚦 CI"
+
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    branches-ignore:
+      - release
+    tags-ignore:
+      - "*"
+
+jobs:
+  regular-build:
+    name: "🧱 Regular build"
+    runs-on: ubuntu-latest
+    steps:
+      - name: "📥 Check out repository"
+        uses: actions/checkout@v4
+
+      - name: "🐹 Set up Go"
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: "🟢 Set up Node.js"
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: "📦 Install frontend dependencies"
+        run: npm ci --prefix frontend
+
+      - name: "🏗️ Build frontend"
+        run: npm --prefix frontend run build
+
+      - name: "🧪 Test Go packages"
+        run: go test ./...
+
+      - name: "🔨 Build Go binary"
+        run: go build ./cmd/nixhostforge
+
+  nix-build:
+    name: "❄️ Nix build"
+    runs-on: ubuntu-latest
+    steps:
+      - name: "📥 Check out repository"
+        uses: actions/checkout@v4
+
+      - name: "❄️ Install Nix"
+        uses: cachix/install-nix-action@v31
+
+      - name: "🏗️ Build with Nix"
+        run: nix shell nixpkgs#just -c just nix-build
