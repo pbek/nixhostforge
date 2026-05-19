@@ -250,6 +250,18 @@ func (a *App) buildHost(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/hosts", http.StatusSeeOther)
 }
 
+func (a *App) buildCurrentHosts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, _, err := a.ManualBuildEnabledHosts(r.Context()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
 func (a *App) builds(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		a.settingsApp(w, r)
@@ -635,6 +647,23 @@ func (a *App) apiHostsBuild(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "build started"})
+}
+
+func (a *App) apiHostsBuildCurrent(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	count, commit, err := a.ManualBuildEnabledHosts(r.Context())
+	if err != nil {
+		writeJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(
+		w,
+		http.StatusOK,
+		map[string]any{"message": "builds started", "count": count, "commit": commit},
+	)
 }
 
 func (a *App) apiBuilds(w http.ResponseWriter, r *http.Request) {

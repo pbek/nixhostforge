@@ -21,6 +21,7 @@ const saving = reactive({
   setup: false,
   host: "",
   build: "",
+  buildCurrent: false,
   pause: false,
   check: false,
 });
@@ -269,6 +270,29 @@ async function buildHost(host) {
   }
 }
 
+async function buildCurrentHosts() {
+  saving.buildCurrent = true;
+  try {
+    const data = await request("/api/hosts/build-current", {
+      method: "POST",
+      body: "{}",
+    });
+    const count = data.count || 0;
+    notify(
+      count === 0
+        ? "No enabled hosts to build."
+        : count === 1
+          ? "Build started for 1 enabled host."
+          : `Builds started for ${count} enabled hosts.`,
+    );
+    await loadPage();
+  } catch (error) {
+    notify(error.message, "error");
+  } finally {
+    saving.buildCurrent = false;
+  }
+}
+
 async function saveRepository() {
   saving.repository = true;
   try {
@@ -478,13 +502,24 @@ onUnmounted(() => window.removeEventListener("popstate", onPopState));
                   discovering hosts.
                 </p>
               </div>
-              <v-btn
-                color="primary"
-                size="large"
-                :loading="saving.check"
-                @click="checkNow"
-                >Check now</v-btn
-              >
+              <div class="d-flex flex-wrap ga-3">
+                <v-btn
+                  color="primary"
+                  size="large"
+                  :loading="saving.check"
+                  @click="checkNow"
+                  >Check now</v-btn
+                >
+                <v-btn
+                  color="primary"
+                  size="large"
+                  variant="tonal"
+                  :disabled="!dashboard.repository.configured"
+                  :loading="saving.buildCurrent"
+                  @click="buildCurrentHosts"
+                  >Build current commit</v-btn
+                >
+              </div>
             </v-card-text>
           </v-card>
 

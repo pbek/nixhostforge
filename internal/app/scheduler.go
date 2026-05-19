@@ -207,6 +207,33 @@ func (a *App) ManualBuild(ctx context.Context, host string) error {
 	return nil
 }
 
+func (a *App) ManualBuildEnabledHosts(ctx context.Context) (int, string, error) {
+	repoDir, err := a.ensureRepo(ctx)
+	if err != nil {
+		return 0, "", err
+	}
+	commit, err := a.currentCommit(ctx, repoDir)
+	if err != nil {
+		return 0, "", err
+	}
+	hosts, err := a.discoverHosts(ctx, repoDir)
+	if err != nil {
+		return 0, commit, err
+	}
+	if err := a.store.UpsertHosts(ctx, hosts); err != nil {
+		return 0, commit, err
+	}
+	a.setStatus(commit, time.Now().UTC(), "")
+	enabled, err := a.store.EnabledHosts(ctx)
+	if err != nil {
+		return 0, commit, err
+	}
+	for _, host := range enabled {
+		go a.runBuild(context.Background(), repoDir, host, commit, true)
+	}
+	return len(enabled), commit, nil
+}
+
 func (a *App) CancelRunning(reason string) {
 	a.runningMu.Lock()
 	running := make([]runningBuild, 0, len(a.running))

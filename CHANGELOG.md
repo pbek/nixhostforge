@@ -2,6 +2,10 @@
 
 ## 0.2.0
 
+### Added
+
+- Added a dashboard button to manually build all enabled hosts at the current repository commit.
+
 ### Fixed
 
 - Fixed the dashboard `Check now` button so decorative hero-card styling no longer blocks clicks.
