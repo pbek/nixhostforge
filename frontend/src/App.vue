@@ -636,7 +636,7 @@ onUnmounted(() => window.removeEventListener("popstate", onPopState));
                   ></v-col
                 ><v-col v-if="!hosts.length" cols="12"
                   ><p class="text-medium-emphasis">
-                    No hosts discovered yet.
+                    No enabled hosts to show.
                   </p></v-col
                 ></v-row
               ></v-card-text

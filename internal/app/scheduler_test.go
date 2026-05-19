@@ -37,6 +37,16 @@ func TestLastStorePath(t *testing.T) {
 	}
 }
 
+func TestEnabledHostDetails(t *testing.T) {
+	got := enabledHostDetails([]Host{
+		{Name: "disabled", Enabled: false},
+		{Name: "enabled", Enabled: true},
+	})
+	if len(got) != 1 || got[0].Name != "enabled" {
+		t.Fatalf("got %v", got)
+	}
+}
+
 func TestNotificationTargetsFromLegacyLines(t *testing.T) {
 	got := notificationTargets(
 		"\n smtp://one.example.test \n\ntelegram://token@telegram?channels=1\r\n",

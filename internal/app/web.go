@@ -200,7 +200,7 @@ func (a *App) dashboard(w http.ResponseWriter, r *http.Request) {
 			Repo:       a.RepositoryConfig(r.Context()),
 			Scheduler:  a.SchedulerConfig(r.Context()),
 			Status:     a.Status(r.Context()),
-			Hosts:      hosts,
+			Hosts:      enabledHostDetails(hosts),
 			Builds:     builds,
 			PauseHours: []int{1, 2, 4, 8, 12, 24},
 		},
@@ -578,10 +578,20 @@ func (a *App) dashboardData(ctx context.Context, buildLimit int) (dashboardRespo
 		Repository: settings.Repository,
 		Scheduler:  settings.Scheduler,
 		Status:     a.Status(ctx),
-		Hosts:      hosts,
+		Hosts:      enabledHostDetails(hosts),
 		Builds:     builds,
 		PauseHours: []int{1, 2, 4, 8, 12, 24},
 	}, nil
+}
+
+func enabledHostDetails(hosts []Host) []Host {
+	enabled := make([]Host, 0, len(hosts))
+	for _, host := range hosts {
+		if host.Enabled {
+			enabled = append(enabled, host)
+		}
+	}
+	return enabled
 }
 
 func (a *App) apiDashboard(w http.ResponseWriter, r *http.Request) {

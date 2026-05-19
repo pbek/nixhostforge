@@ -6,6 +6,10 @@
 
 - Show the application version in the web menu.
 
+### Fixed
+
+- Hide disabled hosts from the dashboard host list.
+
 ## 0.2.0
 
 ### Added

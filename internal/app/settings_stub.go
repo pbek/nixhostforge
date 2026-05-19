@@ -65,7 +65,7 @@ func (a *App) settingsApp(w http.ResponseWriter, r *http.Request) {
 		hosts, _ := a.store.Hosts(r.Context())
 		builds, _ := a.store.Builds(r.Context(), 8)
 		data.Title = "Dashboard"
-		data.Hosts = hosts
+		data.Hosts = enabledHostDetails(hosts)
 		data.Builds = builds
 		a.render(w, r, "dashboard", data)
 	}
