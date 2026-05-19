@@ -566,6 +566,16 @@ watchEffect(() => {
             >{{ dashboard.status.lastError }}</v-alert
           >
 
+          <v-alert
+            v-if="dashboard.status.staleRunningBuilds"
+            class="mb-4"
+            color="warning"
+            variant="tonal"
+            >{{ dashboard.status.staleRunningBuilds }} build(s) are marked
+            running in the database but have no active job. Restart NixHostForge
+            to reconcile them automatically.</v-alert
+          >
+
           <v-row class="mb-2">
             <v-col cols="12" md="3"
               ><v-card class="settings-card stat-card" rounded="lg"
@@ -589,6 +599,12 @@ watchEffect(() => {
                   ><div class="stat-label">Running</div>
                   <div class="stat-value">
                     {{ dashboard.status.runningBuilds }}
+                  </div>
+                  <div
+                    v-if="dashboard.status.staleRunningBuilds"
+                    class="stat-detail warning-text"
+                  >
+                    {{ dashboard.status.staleRunningBuilds }} stale
                   </div></v-card-text
                 ></v-card
               ></v-col

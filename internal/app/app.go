@@ -48,6 +48,10 @@ func New(cfg Config) (*App, error) {
 		running:   map[int64]runningBuild{},
 	}
 	app.slotsCond = sync.NewCond(&app.slotsMu)
+	if err := app.cancelStaleRunningBuilds(context.Background(), "Build cancelled because NixHostForge restarted before this build finished."); err != nil {
+		_ = store.Close()
+		return nil, err
+	}
 	return app, nil
 }
 

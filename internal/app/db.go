@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -221,6 +222,71 @@ func (s *Store) FinishBuild(
 		id,
 	)
 	return err
+}
+
+func (s *Store) RunningBuilds(ctx context.Context) ([]Build, error) {
+	rows, err := s.db.QueryContext(
+		ctx,
+		`select id, host, commit_hash, status, started_at, finished_at, exit_code, output_path, log, manual, notification_sent from builds where status = 'running' order by started_at desc`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var builds []Build
+	for rows.Next() {
+		b, err := scanBuild(rows)
+		if err != nil {
+			return nil, err
+		}
+		builds = append(builds, *b)
+	}
+	return builds, rows.Err()
+}
+
+func (s *Store) CancelStaleRunningBuilds(
+	ctx context.Context,
+	activeIDs map[int64]struct{},
+	message string,
+) (int, error) {
+	builds, err := s.RunningBuilds(ctx)
+	if err != nil {
+		return 0, err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	finishedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	logSuffix := "\n" + message + "\n"
+	cancelled := 0
+	for _, build := range builds {
+		if _, ok := activeIDs[build.ID]; ok {
+			continue
+		}
+		res, err := tx.ExecContext(
+			ctx,
+			`update builds set status = 'cancelled', finished_at = ?, log = case when log = '' then ? else log || ? end where id = ? and status = 'running'`,
+			finishedAt,
+			strings.TrimPrefix(logSuffix, "\n"),
+			logSuffix,
+			build.ID,
+		)
+		if err != nil {
+			return 0, err
+		}
+		affected, err := res.RowsAffected()
+		if err != nil {
+			return 0, err
+		}
+		cancelled += int(affected)
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return cancelled, nil
 }
 
 func (s *Store) MarkNotificationSent(ctx context.Context, id int64) error {

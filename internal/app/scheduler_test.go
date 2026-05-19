@@ -1,6 +1,10 @@
 package app
 
-import "testing"
+import (
+	"context"
+	"path/filepath"
+	"testing"
+)
 
 func TestShouldBuild(t *testing.T) {
 	tests := []struct {
@@ -115,5 +119,54 @@ func TestEnabledNotificationURLs(t *testing.T) {
 	want := []string{"smtp://one.example.test"}
 	if len(got) != len(want) || got[0] != want[0] {
 		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestCancelStaleRunningBuilds(t *testing.T) {
+	ctx := context.Background()
+	store, err := OpenStore(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	activeID, err := store.CreateBuild(ctx, "active", "abc", "running", false)
+	if err != nil {
+		t.Fatalf("CreateBuild() active error = %v", err)
+	}
+	staleID, err := store.CreateBuild(ctx, "stale", "abc", "running", false)
+	if err != nil {
+		t.Fatalf("CreateBuild() stale error = %v", err)
+	}
+
+	cancelled, err := store.CancelStaleRunningBuilds(
+		ctx,
+		map[int64]struct{}{activeID: {}},
+		"Build cancelled because NixHostForge restarted before this build finished.",
+	)
+	if err != nil {
+		t.Fatalf("CancelStaleRunningBuilds() error = %v", err)
+	}
+	if cancelled != 1 {
+		t.Fatalf("CancelStaleRunningBuilds() = %d, want 1", cancelled)
+	}
+
+	active, err := store.Build(ctx, activeID)
+	if err != nil {
+		t.Fatalf("Build(active) error = %v", err)
+	}
+	if active.Status != "running" || active.FinishedAt != nil {
+		t.Fatalf("active build = %+v, want still running", active)
+	}
+
+	stale, err := store.Build(ctx, staleID)
+	if err != nil {
+		t.Fatalf("Build(stale) error = %v", err)
+	}
+	if stale.Status != "cancelled" || stale.FinishedAt == nil {
+		t.Fatalf("stale build = %+v, want cancelled with finish time", stale)
+	}
+	if stale.Log == "" {
+		t.Fatalf("stale build log is empty")
 	}
 }

@@ -21,12 +21,13 @@ type runningBuild struct {
 }
 
 type SchedulerStatus struct {
-	LastCommit        string     `json:"lastCommit"`
-	LastCommitMessage string     `json:"lastCommitMessage"`
-	LastCheck         time.Time  `json:"lastCheck"`
-	LastError         string     `json:"lastError"`
-	RunningBuilds     int        `json:"runningBuilds"`
-	PausedUntil       *time.Time `json:"pausedUntil"`
+	LastCommit         string     `json:"lastCommit"`
+	LastCommitMessage  string     `json:"lastCommitMessage"`
+	LastCheck          time.Time  `json:"lastCheck"`
+	LastError          string     `json:"lastError"`
+	RunningBuilds      int        `json:"runningBuilds"`
+	StaleRunningBuilds int        `json:"staleRunningBuilds"`
+	PausedUntil        *time.Time `json:"pausedUntil"`
 }
 
 type notificationTarget struct {
@@ -266,6 +267,43 @@ func (a *App) CancelRunning(reason string) {
 	}
 }
 
+func (a *App) cancelStaleRunningBuilds(ctx context.Context, message string) error {
+	cancelled, err := a.store.CancelStaleRunningBuilds(ctx, a.activeBuildIDs(), message)
+	if err != nil {
+		return err
+	}
+	if cancelled > 0 {
+		log.Printf("cancelled %d stale running build(s): %s", cancelled, message)
+	}
+	return nil
+}
+
+func (a *App) activeBuildIDs() map[int64]struct{} {
+	a.runningMu.Lock()
+	defer a.runningMu.Unlock()
+	ids := make(map[int64]struct{}, len(a.running))
+	for id := range a.running {
+		ids[id] = struct{}{}
+	}
+	return ids
+}
+
+func (a *App) staleRunningBuilds(ctx context.Context) int {
+	running, err := a.store.RunningBuilds(ctx)
+	if err != nil {
+		log.Printf("load running builds: %v", err)
+		return 0
+	}
+	activeIDs := a.activeBuildIDs()
+	stale := 0
+	for _, build := range running {
+		if _, ok := activeIDs[build.ID]; !ok {
+			stale++
+		}
+	}
+	return stale
+}
+
 func (a *App) acquireBuildSlot() {
 	a.slotsMu.Lock()
 	defer a.slotsMu.Unlock()
@@ -335,6 +373,7 @@ func (a *App) Status(ctx context.Context) SchedulerStatus {
 	a.runningMu.Lock()
 	status.RunningBuilds = len(a.running)
 	a.runningMu.Unlock()
+	status.StaleRunningBuilds = a.staleRunningBuilds(ctx)
 	if paused, until := a.paused(ctx); paused {
 		status.PausedUntil = &until
 	}

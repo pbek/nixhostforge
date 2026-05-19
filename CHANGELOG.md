@@ -5,6 +5,7 @@
 ### Fixed
 
 - Set the browser page title to the active page name.
+- Cancel stale `running` builds on startup when the service restarted before their job could finish, and surface stale running build counts in status.
 
 ## 0.3.0
 

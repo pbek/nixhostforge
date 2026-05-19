@@ -196,6 +196,10 @@ a:hover {
   white-space: nowrap;
 }
 
+.warning-text {
+  color: #fcd34d;
+}
+
 .auth-shell {
   display: grid;
   min-height: 100vh;
