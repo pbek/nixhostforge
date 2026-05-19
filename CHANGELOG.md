@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+### Fixed
+
+- Fixed the dashboard `Check now` button so decorative hero-card styling no longer blocks clicks.
+
 ## 0.1.0
 
 Initial release of NixHostForge.

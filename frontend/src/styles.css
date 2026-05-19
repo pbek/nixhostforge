@@ -126,6 +126,12 @@ a:hover {
   border-radius: 999px;
   content: "";
   background: radial-gradient(circle, rgba(6, 182, 212, 0.18), transparent 68%);
+  pointer-events: none;
+}
+
+.hero-card > * {
+  position: relative;
+  z-index: 1;
 }
 
 .eyebrow {
