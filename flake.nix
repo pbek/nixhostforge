@@ -23,7 +23,7 @@
           pkgs = import nixpkgs { inherit system; };
           settingsFrontend = pkgs.buildNpmPackage {
             pname = "nixhostforge-settings";
-            version = "0.2.0";
+            version = "0.3.0";
             src = ./frontend;
             npmDepsHash = "sha256-dPcSqDufxIGokVzq//P0dcPucZBIzdKWRVPpd4u39RE=";
             VITE_OUT_DIR = "dist";
@@ -38,7 +38,7 @@
         {
           default = pkgs.buildGoModule {
             pname = "nixhostforge";
-            version = "0.2.0";
+            version = "0.3.0";
             src = ./.;
             vendorHash = "sha256-Rg1jVL6Uq0iQmj/uWox78eXAdRWGPEVAktMOjL6uygI=";
             tags = [ "embed_settings" ];
