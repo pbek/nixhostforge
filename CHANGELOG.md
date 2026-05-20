@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+
+### Added
+
+- Add a browser favicon to the embedded settings UI.
+
 ## 0.3.1
 
 ### Fixed

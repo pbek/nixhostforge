@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="8" x2="56" y1="8" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8b5cf6" />
+      <stop offset="1" stop-color="#06b6d4" />
+    </linearGradient>
+    <linearGradient id="forge" x1="18" x2="46" y1="16" y2="48" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff" />
+      <stop offset="1" stop-color="#dbeafe" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#080b12" />
+  <path fill="url(#bg)" d="M10 22 32 9l22 13v20L32 55 10 42z" />
+  <path fill="#080b12" fill-opacity=".42" d="M32 15 49 25v15L32 49 15 40V25z" />
+  <path fill="url(#forge)" d="M32 17 45 25v14L32 47 19 39V25zm0 7-7 4v8l7 4 7-4v-8z" />
+  <path fill="#67e8f9" d="M30 4h4v12h-4zM30 48h4v12h-4zM4 30h12v4H4zM48 30h12v4H48z" />
+</svg>
