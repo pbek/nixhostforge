@@ -6,6 +6,10 @@
 
 - Add a browser favicon to the embedded settings UI.
 
+### Fixed
+
+- Wake the scheduler when builds resume from a pause so cancelled builds are retried immediately.
+
 ## 0.3.1
 
 ### Fixed

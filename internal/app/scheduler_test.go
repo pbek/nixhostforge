@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestShouldBuild(t *testing.T) {
@@ -119,6 +120,55 @@ func TestEnabledNotificationURLs(t *testing.T) {
 	want := []string{"smtp://one.example.test"}
 	if len(got) != len(want) || got[0] != want[0] {
 		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestResumeSignalsScheduler(t *testing.T) {
+	ctx := context.Background()
+	store, err := OpenStore(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	app := &App{
+		cfg:     DefaultConfig(),
+		store:   store,
+		wake:    make(chan struct{}, 1),
+		running: map[int64]runningBuild{},
+	}
+	if err := app.Resume(ctx); err != nil {
+		t.Fatalf("Resume() error = %v", err)
+	}
+
+	select {
+	case <-app.wake:
+	default:
+		t.Fatalf("Resume() did not signal scheduler")
+	}
+}
+
+func TestNextCheckDelayUsesPauseExpiry(t *testing.T) {
+	ctx := context.Background()
+	store, err := OpenStore(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	interval := time.Hour
+	app := &App{
+		cfg:   Config{Interval: interval, Concurrency: 1},
+		store: store,
+	}
+	until := time.Now().UTC().Add(5 * time.Minute)
+	if err := store.SetSetting(ctx, "pause_until", until.Format(time.RFC3339Nano)); err != nil {
+		t.Fatalf("SetSetting() error = %v", err)
+	}
+
+	got := app.nextCheckDelay(ctx)
+	if got <= 0 || got >= interval {
+		t.Fatalf("nextCheckDelay() = %v, want positive delay below %v", got, interval)
 	}
 }
 

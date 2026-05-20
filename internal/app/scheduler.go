@@ -51,8 +51,7 @@ func ShouldBuild(previous *Build, manual bool) bool {
 func (a *App) Run(ctx context.Context) {
 	for {
 		a.checkOnce(ctx)
-		interval := a.SchedulerConfig(ctx).Interval
-		timer := time.NewTimer(interval)
+		timer := time.NewTimer(a.nextCheckDelay(ctx))
 		select {
 		case <-ctx.Done():
 			stopTimer(timer)
@@ -63,6 +62,17 @@ func (a *App) Run(ctx context.Context) {
 		case <-timer.C:
 		}
 	}
+}
+
+func (a *App) nextCheckDelay(ctx context.Context) time.Duration {
+	interval := a.SchedulerConfig(ctx).Interval
+	if paused, until := a.paused(ctx); paused {
+		remaining := time.Until(until)
+		if remaining < interval {
+			return remaining
+		}
+	}
+	return interval
 }
 
 func stopTimer(timer *time.Timer) {
@@ -336,7 +346,11 @@ func (a *App) Pause(ctx context.Context, d time.Duration) error {
 }
 
 func (a *App) Resume(ctx context.Context) error {
-	return a.store.DeleteSetting(ctx, "pause_until")
+	if err := a.store.DeleteSetting(ctx, "pause_until"); err != nil {
+		return err
+	}
+	a.signalScheduler()
+	return nil
 }
 
 func (a *App) paused(ctx context.Context) (bool, time.Time) {
