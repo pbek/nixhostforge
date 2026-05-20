@@ -123,6 +123,7 @@ func (a *App) checkOnce(ctx context.Context) {
 		return
 	}
 	a.setStatus(commit, commitMessage, time.Now().UTC(), "")
+	repoConfig := a.RepositoryConfig(ctx)
 
 	enabled, err := a.store.EnabledHosts(ctx)
 	if err != nil {
@@ -136,7 +137,13 @@ func (a *App) checkOnce(ctx context.Context) {
 		if paused, _ := a.paused(ctx); paused {
 			return
 		}
-		previous, err := a.store.LatestBuildFor(ctx, host, commit)
+		previous, err := a.store.LatestBuildFor(
+			ctx,
+			host,
+			repoConfig.Repository,
+			repoConfig.Branch,
+			commit,
+		)
 		if err != nil {
 			log.Printf("load previous build for %s: %v", host, err)
 			continue
@@ -144,11 +151,23 @@ func (a *App) checkOnce(ctx context.Context) {
 		if !ShouldBuild(previous, false) {
 			continue
 		}
-		go a.runBuild(context.Background(), repoDir, host, commit, false)
+		go a.runBuild(
+			context.Background(),
+			repoDir,
+			repoConfig.Repository,
+			repoConfig.Branch,
+			host,
+			commit,
+			false,
+		)
 	}
 }
 
-func (a *App) runBuild(ctx context.Context, repoDir, host, commit string, manual bool) {
+func (a *App) runBuild(
+	ctx context.Context,
+	repoDir, repository, branch, host, commit string,
+	manual bool,
+) {
 	a.acquireBuildSlot()
 	defer a.releaseBuildSlot()
 
@@ -156,7 +175,15 @@ func (a *App) runBuild(ctx context.Context, repoDir, host, commit string, manual
 		return
 	}
 
-	id, err := a.store.CreateBuild(ctx, host, commit, "running", manual)
+	id, err := a.store.CreateBuildForRepository(
+		ctx,
+		host,
+		repository,
+		branch,
+		commit,
+		"running",
+		manual,
+	)
 	if err != nil {
 		log.Printf("create build: %v", err)
 		return
@@ -230,7 +257,16 @@ func (a *App) ManualBuild(ctx context.Context, host string) error {
 	if err != nil {
 		return err
 	}
-	go a.runBuild(context.Background(), repoDir, host, commit, true)
+	repoConfig := a.RepositoryConfig(ctx)
+	go a.runBuild(
+		context.Background(),
+		repoDir,
+		repoConfig.Repository,
+		repoConfig.Branch,
+		host,
+		commit,
+		true,
+	)
 	return nil
 }
 
@@ -255,12 +291,21 @@ func (a *App) ManualBuildEnabledHosts(ctx context.Context) (int, string, error) 
 		return 0, commit, err
 	}
 	a.setStatus(commit, commitMessage, time.Now().UTC(), "")
+	repoConfig := a.RepositoryConfig(ctx)
 	enabled, err := a.store.EnabledHosts(ctx)
 	if err != nil {
 		return 0, commit, err
 	}
 	for _, host := range enabled {
-		go a.runBuild(context.Background(), repoDir, host, commit, true)
+		go a.runBuild(
+			context.Background(),
+			repoDir,
+			repoConfig.Repository,
+			repoConfig.Branch,
+			host,
+			commit,
+			true,
+		)
 	}
 	return len(enabled), commit, nil
 }

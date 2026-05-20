@@ -28,6 +28,8 @@ type Host struct {
 type Build struct {
 	ID               int64      `json:"id"`
 	Host             string     `json:"host"`
+	Repository       string     `json:"repository"`
+	Branch           string     `json:"branch"`
 	CommitHash       string     `json:"commitHash"`
 	Status           string     `json:"status"`
 	StartedAt        time.Time  `json:"startedAt"`
@@ -58,7 +60,7 @@ func (s *Store) migrate() error {
 	stmts := []string{
 		`create table if not exists settings (key text primary key, value text not null)`,
 		`create table if not exists hosts (name text primary key, enabled integer not null default 0, discovered_at text not null)`,
-		`create table if not exists builds (id integer primary key autoincrement, host text not null, commit_hash text not null, status text not null, started_at text not null, finished_at text, exit_code integer, output_path text not null default '', log text not null default '', manual integer not null default 0, notification_sent integer not null default 0)`,
+		`create table if not exists builds (id integer primary key autoincrement, host text not null, repository text not null default '', branch text not null default '', commit_hash text not null, status text not null, started_at text not null, finished_at text, exit_code integer, output_path text not null default '', log text not null default '', manual integer not null default 0, notification_sent integer not null default 0)`,
 		`create table if not exists sessions (token_hash text primary key, created_at text not null, expires_at text not null)`,
 		`create index if not exists builds_host_commit on builds(host, commit_hash)`,
 		`create index if not exists builds_started_at on builds(started_at desc)`,
@@ -68,7 +70,42 @@ func (s *Store) migrate() error {
 			return err
 		}
 	}
-	return nil
+	if err := s.ensureColumn("builds", "repository", `alter table builds add column repository text not null default ''`); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("builds", "branch", `alter table builds add column branch text not null default ''`); err != nil {
+		return err
+	}
+	_, err := s.db.Exec(
+		`create index if not exists builds_host_repo_branch_commit on builds(host, repository, branch, commit_hash)`,
+	)
+	return err
+}
+
+func (s *Store) ensureColumn(table, column, stmt string) error {
+	rows, err := s.db.Query(`pragma table_info(` + table + `)`)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var cid int
+		var name, columnType string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &pk); err != nil {
+			return err
+		}
+		if name == column {
+			return rows.Err()
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	_, err = s.db.Exec(stmt)
+	return err
 }
 
 func (s *Store) GetSetting(ctx context.Context, key string) (string, bool, error) {
@@ -166,11 +203,16 @@ func (s *Store) SetHostEnabled(ctx context.Context, name string, enabled bool) e
 	return err
 }
 
-func (s *Store) LatestBuildFor(ctx context.Context, host, commit string) (*Build, error) {
+func (s *Store) LatestBuildFor(
+	ctx context.Context,
+	host, repository, branch, commit string,
+) (*Build, error) {
 	row := s.db.QueryRowContext(
 		ctx,
-		`select id, host, commit_hash, status, started_at, finished_at, exit_code, output_path, log, manual, notification_sent from builds where host = ? and commit_hash = ? order by started_at desc limit 1`,
+		`select id, host, repository, branch, commit_hash, status, started_at, finished_at, exit_code, output_path, log, manual, notification_sent from builds where host = ? and repository = ? and branch = ? and commit_hash = ? order by started_at desc limit 1`,
 		host,
+		repository,
+		branch,
 		commit,
 	)
 	return scanBuild(row)
@@ -181,14 +223,24 @@ func (s *Store) CreateBuild(
 	host, commit, status string,
 	manual bool,
 ) (int64, error) {
+	return s.CreateBuildForRepository(ctx, host, "", "", commit, status, manual)
+}
+
+func (s *Store) CreateBuildForRepository(
+	ctx context.Context,
+	host, repository, branch, commit, status string,
+	manual bool,
+) (int64, error) {
 	manualInt := 0
 	if manual {
 		manualInt = 1
 	}
 	res, err := s.db.ExecContext(
 		ctx,
-		`insert into builds(host, commit_hash, status, started_at, manual) values(?, ?, ?, ?, ?)`,
+		`insert into builds(host, repository, branch, commit_hash, status, started_at, manual) values(?, ?, ?, ?, ?, ?, ?)`,
 		host,
+		repository,
+		branch,
 		commit,
 		status,
 		time.Now().UTC().Format(time.RFC3339Nano),
@@ -227,7 +279,7 @@ func (s *Store) FinishBuild(
 func (s *Store) RunningBuilds(ctx context.Context) ([]Build, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
-		`select id, host, commit_hash, status, started_at, finished_at, exit_code, output_path, log, manual, notification_sent from builds where status = 'running' order by started_at desc`,
+		`select id, host, repository, branch, commit_hash, status, started_at, finished_at, exit_code, output_path, log, manual, notification_sent from builds where status = 'running' order by started_at desc`,
 	)
 	if err != nil {
 		return nil, err
@@ -297,7 +349,7 @@ func (s *Store) MarkNotificationSent(ctx context.Context, id int64) error {
 func (s *Store) Build(ctx context.Context, id int64) (*Build, error) {
 	row := s.db.QueryRowContext(
 		ctx,
-		`select id, host, commit_hash, status, started_at, finished_at, exit_code, output_path, log, manual, notification_sent from builds where id = ?`,
+		`select id, host, repository, branch, commit_hash, status, started_at, finished_at, exit_code, output_path, log, manual, notification_sent from builds where id = ?`,
 		id,
 	)
 	return scanBuild(row)
@@ -306,7 +358,7 @@ func (s *Store) Build(ctx context.Context, id int64) (*Build, error) {
 func (s *Store) Builds(ctx context.Context, limit int) ([]Build, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
-		`select id, host, commit_hash, status, started_at, finished_at, exit_code, output_path, log, manual, notification_sent from builds order by started_at desc limit ?`,
+		`select id, host, repository, branch, commit_hash, status, started_at, finished_at, exit_code, output_path, log, manual, notification_sent from builds order by started_at desc limit ?`,
 		limit,
 	)
 	if err != nil {
@@ -333,7 +385,7 @@ func scanBuild(scanner buildScanner) (*Build, error) {
 	var started, finished sql.NullString
 	var exit sql.NullInt64
 	var manual, notification int
-	if err := scanner.Scan(&b.ID, &b.Host, &b.CommitHash, &b.Status, &started, &finished, &exit, &b.OutputPath, &b.Log, &manual, &notification); err != nil {
+	if err := scanner.Scan(&b.ID, &b.Host, &b.Repository, &b.Branch, &b.CommitHash, &b.Status, &started, &finished, &exit, &b.OutputPath, &b.Log, &manual, &notification); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}

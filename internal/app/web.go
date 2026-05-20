@@ -235,6 +235,9 @@ func (a *App) toggleHost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if enabled {
+		a.signalScheduler()
+	}
 	http.Redirect(w, r, "/hosts", http.StatusSeeOther)
 }
 
@@ -633,6 +636,9 @@ func (a *App) apiHostsToggle(w http.ResponseWriter, r *http.Request) {
 	if err := a.store.SetHostEnabled(r.Context(), req.Host, req.Enabled); err != nil {
 		writeJSONError(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if req.Enabled {
+		a.signalScheduler()
 	}
 	hosts, err := a.store.Hosts(r.Context())
 	if err != nil {

@@ -9,6 +9,8 @@
 ### Fixed
 
 - Wake the scheduler when builds resume from a pause so cancelled builds are retried immediately.
+- Build enabled hosts again when the configured repository or branch changes, even if the commit hash was built before.
+- Wake the scheduler when a host is enabled so it can build the current commit immediately.
 
 ## 0.3.1
 

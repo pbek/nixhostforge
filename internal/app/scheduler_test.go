@@ -1,7 +1,10 @@
 package app
 
 import (
+	"bytes"
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"testing"
 	"time"
@@ -39,6 +42,50 @@ func TestLastStorePath(t *testing.T) {
 	got := lastStorePath("building\n/nix/store/abc-host\n")
 	if got != "/nix/store/abc-host" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestLatestBuildForIsScopedToRepository(t *testing.T) {
+	ctx := context.Background()
+	store, err := OpenStore(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	_, err = store.CreateBuildForRepository(
+		ctx,
+		"host",
+		"https://example.test/one.git",
+		"main",
+		"abc",
+		"success",
+		false,
+	)
+	if err != nil {
+		t.Fatalf("CreateBuildForRepository() error = %v", err)
+	}
+
+	previous, err := store.LatestBuildFor(
+		ctx,
+		"host",
+		"https://example.test/two.git",
+		"main",
+		"abc",
+	)
+	if err != nil {
+		t.Fatalf("LatestBuildFor() different repository error = %v", err)
+	}
+	if previous != nil {
+		t.Fatalf("LatestBuildFor() different repository = %+v, want nil", previous)
+	}
+
+	previous, err = store.LatestBuildFor(ctx, "host", "https://example.test/one.git", "main", "abc")
+	if err != nil {
+		t.Fatalf("LatestBuildFor() same repository error = %v", err)
+	}
+	if previous == nil || previous.Status != "success" {
+		t.Fatalf("LatestBuildFor() same repository = %+v, want success", previous)
 	}
 }
 
@@ -145,6 +192,41 @@ func TestResumeSignalsScheduler(t *testing.T) {
 	case <-app.wake:
 	default:
 		t.Fatalf("Resume() did not signal scheduler")
+	}
+}
+
+func TestEnableHostSignalsScheduler(t *testing.T) {
+	ctx := context.Background()
+	store, err := OpenStore(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	defer func() { _ = store.Close() }()
+	if err := store.UpsertHosts(ctx, []string{"host"}); err != nil {
+		t.Fatalf("UpsertHosts() error = %v", err)
+	}
+
+	app := &App{
+		cfg:     DefaultConfig(),
+		store:   store,
+		wake:    make(chan struct{}, 1),
+		running: map[int64]runningBuild{},
+	}
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/hosts/toggle",
+		bytes.NewBufferString(`{"host":"host","enabled":true}`),
+	)
+	rr := httptest.NewRecorder()
+	app.apiHostsToggle(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("apiHostsToggle() status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	select {
+	case <-app.wake:
+	default:
+		t.Fatalf("apiHostsToggle() did not signal scheduler")
 	}
 }
 

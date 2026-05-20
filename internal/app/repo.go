@@ -18,39 +18,60 @@ func (a *App) ensureRepo(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("repository is not configured")
 	}
 	repoDir := filepath.Join(a.cfg.StateDir, "repo")
+	clone := false
 	if _, err := os.Stat(filepath.Join(repoDir, ".git")); os.IsNotExist(err) {
 		if err := os.RemoveAll(repoDir); err != nil {
 			return "", err
 		}
-		cmd := exec.CommandContext(
-			ctx,
-			"git",
-			"clone",
-			"--branch",
-			repoConfig.Branch,
-			repoConfig.Repository,
-			repoDir,
-		)
+		clone = true
+	} else {
+		remote, err := gitRemoteURL(ctx, repoDir)
+		if err != nil {
+			return "", err
+		}
+		if remote != repoConfig.Repository {
+			if err := os.RemoveAll(repoDir); err != nil {
+				return "", err
+			}
+			clone = true
+		}
+	}
+	if clone {
+		return cloneRepo(ctx, repoConfig.Repository, repoConfig.Branch, repoDir)
+	}
+	commands := [][]string{
+		{"fetch", "origin", repoConfig.Branch},
+		{"checkout", repoConfig.Branch},
+		{"reset", "--hard", "origin/" + repoConfig.Branch},
+	}
+	for _, args := range commands {
+		cmd := exec.CommandContext(ctx, "git", args...)
+		cmd.Dir = repoDir
 		out, err := cmd.CombinedOutput()
 		if err != nil {
-			return "", fmt.Errorf("git clone: %w\n%s", err, string(out))
-		}
-	} else {
-		commands := [][]string{
-			{"fetch", "origin", repoConfig.Branch},
-			{"checkout", repoConfig.Branch},
-			{"reset", "--hard", "origin/" + repoConfig.Branch},
-		}
-		for _, args := range commands {
-			cmd := exec.CommandContext(ctx, "git", args...)
-			cmd.Dir = repoDir
-			out, err := cmd.CombinedOutput()
-			if err != nil {
-				return "", fmt.Errorf("git %s: %w\n%s", strings.Join(args, " "), err, string(out))
-			}
+			return "", fmt.Errorf("git %s: %w\n%s", strings.Join(args, " "), err, string(out))
 		}
 	}
 	return repoDir, nil
+}
+
+func cloneRepo(ctx context.Context, repository, branch, repoDir string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", "clone", "--branch", branch, repository, repoDir)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("git clone: %w\n%s", err, string(out))
+	}
+	return repoDir, nil
+}
+
+func gitRemoteURL(ctx context.Context, repoDir string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", "config", "--get", "remote.origin.url")
+	cmd.Dir = repoDir
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 func (a *App) currentCommit(ctx context.Context, repoDir string) (string, error) {
