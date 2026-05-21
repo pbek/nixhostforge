@@ -17,6 +17,7 @@ const loginForm = reactive({ password: "", confirm: "" });
 const dashboard = ref(null);
 const hosts = ref([]);
 const hostSearch = ref("");
+const hostSort = ref("enabled-desc");
 const builds = ref([]);
 const build = ref(null);
 const selectedPauseHours = ref(1);
@@ -49,6 +50,11 @@ const settings = reactive({
   },
   notificationUrls: [{ url: "", enabled: true }],
 });
+const hostSortOptions = [
+  { title: "Enabled first", value: "enabled-desc" },
+  { title: "Disabled first", value: "enabled-asc" },
+  { title: "Name A-Z", value: "name" },
+];
 const appVersion = import.meta.env.VITE_NIXHOSTFORGE_VERSION || "dev";
 
 const authenticatedPage = computed(
@@ -75,8 +81,10 @@ const pageName = computed(() => {
 });
 const filteredHosts = computed(() => {
   const query = (hostSearch.value || "").trim().toLowerCase();
-  if (!query) return hosts.value;
-  return hosts.value.filter((host) => host.name.toLowerCase().includes(query));
+  const filtered = query
+    ? hosts.value.filter((host) => host.name.toLowerCase().includes(query))
+    : hosts.value;
+  return [...filtered].sort(compareHosts);
 });
 const latestCommitUrl = computed(() =>
   githubCommitUrl(
@@ -87,6 +95,15 @@ const latestCommitUrl = computed(() =>
 
 function shortCommit(value) {
   return value ? value.slice(0, 12) : "unknown";
+}
+
+function compareHosts(a, b) {
+  const nameOrder = a.name.localeCompare(b.name);
+  if (hostSort.value === "name") return nameOrder;
+
+  const enabledOrder = Number(a.enabled) - Number(b.enabled);
+  if (hostSort.value === "enabled-asc") return enabledOrder || nameOrder;
+  return -enabledOrder || nameOrder;
 }
 
 function githubCommitUrl(repository, commit) {
@@ -738,15 +755,25 @@ watchEffect(() => {
           />
           <v-card class="settings-card" rounded="xl"
             ><v-card-text class="pb-0"
-              ><v-text-field
-                v-model="hostSearch"
-                class="host-search"
-                clearable
-                hide-details
-                label="Search hosts"
-                placeholder="Filter by host name"
-                variant="outlined"
-            /></v-card-text>
+              ><v-row dense
+                ><v-col cols="12" md="8"
+                  ><v-text-field
+                    v-model="hostSearch"
+                    class="host-search"
+                    clearable
+                    hide-details
+                    label="Search hosts"
+                    placeholder="Filter by host name"
+                    variant="outlined" /></v-col
+                ><v-col cols="12" md="4"
+                  ><v-select
+                    v-model="hostSort"
+                    :items="hostSortOptions"
+                    hide-details
+                    label="Sort hosts"
+                    variant="outlined" /></v-col
+              ></v-row>
+            </v-card-text>
             <v-list bg-color="transparent"
               ><v-list-item
                 v-for="host in filteredHosts"
