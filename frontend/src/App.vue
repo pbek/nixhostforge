@@ -32,6 +32,7 @@ const selectedPauseHours = ref(1);
 const saving = reactive({
   repository: false,
   scheduler: false,
+  publicUrl: false,
   notifications: false,
   test: false,
   login: false,
@@ -55,6 +56,10 @@ const settings = reactive({
     intervalMutable: false,
     concurrency: 1,
     concurrencyMutable: false,
+  },
+  publicUrl: {
+    url: "",
+    mutable: true,
   },
   notificationUrls: [{ url: "", enabled: true }],
 });
@@ -176,6 +181,7 @@ function newNotificationUrl() {
 function applySettings(next) {
   settings.repository = { ...next.repository };
   settings.scheduler = { ...next.scheduler };
+  settings.publicUrl = { ...(next.publicUrl || { url: "", mutable: true }) };
   const targets = Array.isArray(next.notificationUrls)
     ? next.notificationUrls
     : (next.notificationUrl || "")
@@ -199,6 +205,7 @@ function applyDashboard(data) {
   builds.value = data.builds || [];
   settings.repository = { ...data.repository };
   settings.scheduler = { ...data.scheduler };
+  if (data.publicUrl) settings.publicUrl = { ...data.publicUrl };
 }
 
 async function request(url, options = {}) {
@@ -425,6 +432,23 @@ async function saveScheduler() {
     notify(error.message, "error");
   } finally {
     saving.scheduler = false;
+  }
+}
+
+async function savePublicURL() {
+  saving.publicUrl = true;
+  try {
+    applySettings(
+      await request("/api/settings/public-url", {
+        method: "POST",
+        body: JSON.stringify(settings.publicUrl),
+      }),
+    );
+    notify("Public URL saved.");
+  } catch (error) {
+    notify(error.message, "error");
+  } finally {
+    saving.publicUrl = false;
   }
 }
 
@@ -1025,6 +1049,47 @@ watchEffect(() => {
                 ></v-card
               ></v-col
             >
+            <v-col cols="12" lg="6">
+              <v-card class="settings-card" rounded="xl">
+                <v-card-title>Public URL</v-card-title>
+                <v-card-subtitle>
+                  The external base URL used for build links in notifications.
+                </v-card-subtitle>
+                <v-card-text>
+                  <v-form
+                    v-if="settings.publicUrl.mutable"
+                    @submit.prevent="savePublicURL"
+                  >
+                    <v-text-field
+                      v-model="settings.publicUrl.url"
+                      label="Public URL"
+                      placeholder="https://nixhostforge.example.com"
+                      variant="outlined"
+                      hint="Leave empty to omit build links from notifications."
+                      persistent-hint
+                      class="mb-4"
+                    />
+                    <v-btn
+                      type="submit"
+                      color="primary"
+                      :loading="saving.publicUrl"
+                      >Save Public URL</v-btn
+                    >
+                  </v-form>
+                  <div v-else class="d-flex flex-column ga-3">
+                    <div>
+                      Public URL:
+                      <span class="readonly-value">{{
+                        settings.publicUrl.url || "not configured"
+                      }}</span>
+                    </div>
+                    <v-alert color="info" variant="tonal"
+                      >Configured by static config or the NixOS module.</v-alert
+                    >
+                  </div>
+                </v-card-text>
+              </v-card>
+            </v-col>
             <v-col cols="12">
               <v-card class="settings-card" rounded="xl">
                 <v-card-title>Notifications</v-card-title>

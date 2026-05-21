@@ -14,6 +14,7 @@ let
     branch = "${cfg.branch}"
     listen_address = "${cfg.listenAddress}"
     port = ${toString cfg.port}
+    ${lib.optionalString (cfg.publicUrl != "") ''public_url = "${cfg.publicUrl}"''}
     state_dir = "${cfg.stateDir}"
     ${lib.optionalString (cfg.interval != null) ''interval = "${cfg.interval}"''}
     ${lib.optionalString (cfg.concurrency != null) "concurrency = ${toString cfg.concurrency}"}
@@ -58,6 +59,13 @@ in
       type = lib.types.port;
       default = 9637;
       description = "Port for the web interface.";
+    };
+
+    publicUrl = lib.mkOption {
+      type = lib.types.str;
+      default = "";
+      example = "https://nixhostforge.example.com";
+      description = "Public base URL used to create absolute build links in notifications.";
     };
 
     stateDir = lib.mkOption {

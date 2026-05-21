@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -19,6 +20,8 @@ type Config struct {
 	IntervalConfigured    bool
 	ListenAddress         string
 	Port                  int
+	PublicURL             string
+	PublicURLConfigured   bool
 	StateDir              string
 	Concurrency           int
 	ConcurrencyConfigured bool
@@ -36,6 +39,11 @@ type SchedulerConfig struct {
 	IntervalMutable    bool
 	Concurrency        int
 	ConcurrencyMutable bool
+}
+
+type PublicURLConfig struct {
+	URL     string
+	Mutable bool
 }
 
 func DefaultConfig() Config {
@@ -101,6 +109,9 @@ func LoadConfig(path string) (Config, error) {
 				return cfg, fmt.Errorf("parse port: %w", err)
 			}
 			cfg.Port = port
+		case "public_url":
+			cfg.PublicURL = value
+			cfg.PublicURLConfigured = true
 		case "state_dir":
 			cfg.StateDir = value
 		case "concurrency":
@@ -123,7 +134,28 @@ func LoadConfig(path string) (Config, error) {
 		return cfg, errors.New("state_dir must not be empty")
 	}
 	cfg.StateDir = filepath.Clean(cfg.StateDir)
+	cfg.PublicURL = strings.TrimRight(strings.TrimSpace(cfg.PublicURL), "/")
+	if err := validatePublicURL(cfg.PublicURL); err != nil {
+		return cfg, err
+	}
 	return cfg, nil
+}
+
+func validatePublicURL(publicURL string) error {
+	if publicURL == "" {
+		return nil
+	}
+	parsed, err := url.Parse(publicURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return errors.New("public URL must be an absolute URL")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return errors.New("public URL must use http or https")
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return errors.New("public URL must not include a query string or fragment")
+	}
+	return nil
 }
 
 func (a *App) SchedulerConfig(ctx context.Context) SchedulerConfig {
@@ -198,6 +230,30 @@ func (a *App) SaveSchedulerConfig(ctx context.Context, intervalText, concurrency
 	a.slotsCond.Broadcast()
 	a.slotsMu.Unlock()
 	return nil
+}
+
+func (a *App) PublicURLConfig(ctx context.Context) PublicURLConfig {
+	if a.cfg.PublicURLConfigured {
+		return PublicURLConfig{URL: a.cfg.PublicURL}
+	}
+	publicURL, _, _ := a.store.GetSetting(ctx, "public_url")
+	return PublicURLConfig{
+		URL:     strings.TrimRight(strings.TrimSpace(publicURL), "/"),
+		Mutable: true,
+	}
+}
+
+func (a *App) SavePublicURLConfig(ctx context.Context, publicURL string) error {
+	if a.cfg.PublicURLConfigured {
+		return errors.New(
+			"public URL is configured by static config and cannot be changed in the web UI",
+		)
+	}
+	publicURL = strings.TrimRight(strings.TrimSpace(publicURL), "/")
+	if err := validatePublicURL(publicURL); err != nil {
+		return err
+	}
+	return a.store.SetSetting(ctx, "public_url", publicURL)
 }
 
 func (a *App) RepositoryConfig(ctx context.Context) RepositoryConfig {

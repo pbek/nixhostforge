@@ -265,11 +265,11 @@ func (a *App) runBuild(
 	}
 	switch status {
 	case "success":
-		a.notifyBuildResult(context.Background(), id, host, commit, status)
+		a.notifyBuildResult(context.Background(), id, host, repository, commit, status)
 	case "cancelled":
-		a.notifyBuildResult(context.Background(), id, host, commit, status)
+		a.notifyBuildResult(context.Background(), id, host, repository, commit, status)
 	case "failed":
-		a.notifyBuildResult(context.Background(), id, host, commit, status)
+		a.notifyBuildResult(context.Background(), id, host, repository, commit, status)
 	}
 }
 
@@ -515,7 +515,11 @@ func (a *App) Status(ctx context.Context) SchedulerStatus {
 	return status
 }
 
-func (a *App) notifyBuildResult(ctx context.Context, id int64, host, commit, status string) {
+func (a *App) notifyBuildResult(
+	ctx context.Context,
+	id int64,
+	host, repository, commit, status string,
+) {
 	value, ok, err := a.store.GetSetting(ctx, "notification_url")
 	urls := notificationURLsForStatus(value, status)
 	if err != nil || !ok || len(urls) == 0 {
@@ -525,7 +529,6 @@ func (a *App) notifyBuildResult(ctx context.Context, id int64, host, commit, sta
 	if len(shortCommit) > 12 {
 		shortCommit = shortCommit[:12]
 	}
-	repoConfig := a.RepositoryConfig(ctx)
 	title := map[string]string{
 		"success":   "NixHostForge build succeeded",
 		"cancelled": "NixHostForge build cancelled",
@@ -535,12 +538,19 @@ func (a *App) notifyBuildResult(ctx context.Context, id int64, host, commit, sta
 		title = "NixHostForge build update"
 	}
 	message := fmt.Sprintf(
-		"%s\n\nHost: %s\nCommit: %s\nRepository: %s\n\nOpen NixHostForge for the full build log.",
+		"%s\n\nHost: %s\nCommit: %s\nRepository: %s",
 		title,
 		host,
 		shortCommit,
-		repoConfig.Repository,
+		repository,
 	)
+	if buildURL := notificationBuildURL(a.PublicURLConfig(ctx).URL, id); buildURL != "" {
+		message += "\nBuild: " + buildURL
+	}
+	if commitURL := githubCommitURL(repository, commit); commitURL != "" {
+		message += "\nGitHub commit: " + commitURL
+	}
+	message += "\n\nOpen NixHostForge for the full build log."
 	sent := false
 	for i, url := range urls {
 		if err := shoutrrr.Send(url, message); err != nil {
@@ -552,6 +562,14 @@ func (a *App) notifyBuildResult(ctx context.Context, id int64, host, commit, sta
 	if sent {
 		_ = a.store.MarkNotificationSent(ctx, id)
 	}
+}
+
+func notificationBuildURL(publicURL string, id int64) string {
+	publicURL = strings.TrimRight(strings.TrimSpace(publicURL), "/")
+	if publicURL == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s/builds/%d", publicURL, id)
 }
 
 func notificationTargets(value string) []notificationTarget {

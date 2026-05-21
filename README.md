@@ -40,6 +40,7 @@ branch = "main"
 interval = "15m"
 listen_address = "0.0.0.0"
 port = 9637
+public_url = "https://nixhostforge.example.com"
 state_dir = "/tmp/nixhostforge"
 concurrency = 1
 ```
@@ -54,6 +55,7 @@ concurrency = 1
     branch = "main";
     listenAddress = "0.0.0.0";
     port = 9637;
+    publicUrl = "https://nixhostforge.example.com";
     openFirewall = false;
 
     # Optional. Leave unset to configure them in the web UI.
@@ -69,9 +71,13 @@ concurrency = 1
 
 The web interface listens on all interfaces by default. `openFirewall` remains false by default, so expose the port intentionally.
 
+Set `publicUrl` when you want notifications to include absolute links back to build logs. If it is not set in static config or the NixOS module, it can be configured from the web UI under Settings.
+
 ## Notifications
 
 NixHostForge uses shoutrrr notification URLs. Configure one or more URLs in the web UI under Settings. Each URL has its own enabled toggle, test button, and checkboxes for success messages, warnings, and errors; disabled URLs are kept but skipped for notifications.
+
+Build result notifications include the build log link when `publicUrl` is configured, and include a GitHub commit link when the watched repository is hosted on GitHub.
 
 Examples:
 

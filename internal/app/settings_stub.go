@@ -15,6 +15,7 @@ func (a *App) settingsApp(w http.ResponseWriter, r *http.Request) {
 		Status:     a.Status(r.Context()),
 		Repo:       a.RepositoryConfig(r.Context()),
 		Scheduler:  a.SchedulerConfig(r.Context()),
+		PublicURL:  a.PublicURLConfig(r.Context()),
 		PauseHours: []int{1, 2, 4, 8, 12, 24},
 	}
 

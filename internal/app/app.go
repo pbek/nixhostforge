@@ -93,6 +93,7 @@ func (a *App) Router() http.Handler {
 	mux.HandleFunc("/api/settings", a.requireAuth(a.apiSettings))
 	mux.HandleFunc("/api/settings/repository", a.requireAuth(a.apiSettingsRepository))
 	mux.HandleFunc("/api/settings/scheduler", a.requireAuth(a.apiSettingsScheduler))
+	mux.HandleFunc("/api/settings/public-url", a.requireAuth(a.apiSettingsPublicURL))
 	mux.HandleFunc("/api/settings/notifications", a.requireAuth(a.apiSettingsNotifications))
 	mux.HandleFunc(
 		"/api/settings/notifications/test",

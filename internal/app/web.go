@@ -14,6 +14,7 @@ import (
 type settingsResponse struct {
 	Repository       settingsRepository   `json:"repository"`
 	Scheduler        settingsScheduler    `json:"scheduler"`
+	PublicURL        settingsPublicURL    `json:"publicUrl"`
 	NotificationURL  string               `json:"notificationUrl"`
 	NotificationURLs []notificationTarget `json:"notificationUrls"`
 }
@@ -32,6 +33,11 @@ type settingsScheduler struct {
 	ConcurrencyMutable bool   `json:"concurrencyMutable"`
 }
 
+type settingsPublicURL struct {
+	URL     string `json:"url"`
+	Mutable bool   `json:"mutable"`
+}
+
 type repositoryRequest struct {
 	Repository string `json:"repository"`
 	Branch     string `json:"branch"`
@@ -40,6 +46,10 @@ type repositoryRequest struct {
 type schedulerRequest struct {
 	Interval    string `json:"interval"`
 	Concurrency int    `json:"concurrency"`
+}
+
+type publicURLRequest struct {
+	URL string `json:"url"`
 }
 
 type notificationRequest struct {
@@ -90,6 +100,7 @@ type pageData struct {
 	Config          Config
 	Repo            RepositoryConfig
 	Scheduler       SchedulerConfig
+	PublicURL       PublicURLConfig
 	Status          SchedulerStatus
 	Hosts           []Host
 	Builds          []Build
@@ -372,6 +383,11 @@ func (a *App) settings(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
+		case "public_url":
+			if err := a.SavePublicURLConfig(r.Context(), r.FormValue("public_url")); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
 		default:
 			notificationValue, err := encodeNotificationTargets(
 				[]notificationTarget{defaultNotificationTarget(r.FormValue("notification_url"))},
@@ -400,6 +416,7 @@ func (a *App) settings(w http.ResponseWriter, r *http.Request) {
 func (a *App) settingsData(ctx context.Context) settingsResponse {
 	repo := a.RepositoryConfig(ctx)
 	scheduler := a.SchedulerConfig(ctx)
+	publicURL := a.PublicURLConfig(ctx)
 	notificationValue, _, _ := a.store.GetSetting(ctx, "notification_url")
 	targets := notificationTargets(notificationValue)
 	var notificationURLs []string
@@ -414,6 +431,7 @@ func (a *App) settingsData(ctx context.Context) settingsResponse {
 			Concurrency:        scheduler.Concurrency,
 			ConcurrencyMutable: scheduler.ConcurrencyMutable,
 		},
+		PublicURL:        settingsPublicURL(publicURL),
 		NotificationURL:  strings.Join(notificationURLs, "\n"),
 		NotificationURLs: targets,
 	}
@@ -456,6 +474,23 @@ func (a *App) apiSettingsScheduler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.SaveSchedulerConfig(r.Context(), req.Interval, strconv.Itoa(req.Concurrency)); err != nil {
+		writeJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.settingsData(r.Context()))
+}
+
+func (a *App) apiSettingsPublicURL(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req publicURLRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	if err := a.SavePublicURLConfig(r.Context(), req.URL); err != nil {
 		writeJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}

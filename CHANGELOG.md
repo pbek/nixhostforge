@@ -5,6 +5,8 @@
 ### Added
 
 - Link the dashboard latest commit to GitHub when the configured repository is hosted on GitHub.
+- Include build links and GitHub commit links in build result notifications.
+- Add a Settings UI field for the public URL used in notification build links.
 - Add search to the Hosts page.
 - Add host sorting on the Hosts page, defaulting to enabled hosts first.
 - Add remembered host grouping to the Builds page.

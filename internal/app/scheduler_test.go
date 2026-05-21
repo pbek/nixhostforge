@@ -160,6 +160,48 @@ func TestNotificationURLsForStatus(t *testing.T) {
 	}
 }
 
+func TestNotificationBuildURL(t *testing.T) {
+	if got := notificationBuildURL("https://nixhostforge.example.com/", 42); got != "https://nixhostforge.example.com/builds/42" {
+		t.Fatalf("notificationBuildURL() = %q", got)
+	}
+	if got := notificationBuildURL("", 42); got != "" {
+		t.Fatalf("notificationBuildURL() without public URL = %q, want empty", got)
+	}
+}
+
+func TestSavePublicURLConfig(t *testing.T) {
+	ctx := context.Background()
+	store, err := OpenStore(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	app := &App{cfg: DefaultConfig(), store: store}
+	if err := app.SavePublicURLConfig(ctx, "https://nixhostforge.example.com/"); err != nil {
+		t.Fatalf("SavePublicURLConfig() error = %v", err)
+	}
+	if got := app.PublicURLConfig(ctx).URL; got != "https://nixhostforge.example.com" {
+		t.Fatalf("PublicURLConfig().URL = %q", got)
+	}
+	if err := app.SavePublicURLConfig(ctx, "ftp://nixhostforge.example.com"); err == nil {
+		t.Fatalf("SavePublicURLConfig() accepted non-HTTP URL")
+	}
+	if err := app.SavePublicURLConfig(ctx, "https://nixhostforge.example.com?token=secret"); err == nil {
+		t.Fatalf("SavePublicURLConfig() accepted URL with query string")
+	}
+}
+
+func TestGitHubCommitURL(t *testing.T) {
+	commit := "abcdef1234567890"
+	if got := githubCommitURL("git@github.com:owner/repo.git", commit); got != "https://github.com/owner/repo/commit/"+commit {
+		t.Fatalf("githubCommitURL() = %q", got)
+	}
+	if got := githubCommitURL("https://example.com/owner/repo.git", commit); got != "" {
+		t.Fatalf("githubCommitURL() for non-GitHub repo = %q, want empty", got)
+	}
+}
+
 func TestEnabledNotificationURLs(t *testing.T) {
 	got := enabledNotificationURLs(
 		`[{"url":"smtp://one.example.test","enabled":true},{"url":"telegram://token@telegram?channels=1","enabled":false}]`,
