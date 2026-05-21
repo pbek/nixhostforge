@@ -5,6 +5,7 @@ import {
   onUnmounted,
   reactive,
   ref,
+  watch,
   watchEffect,
 } from "vue";
 import BuildTable from "./BuildTable.vue";
@@ -17,7 +18,13 @@ const loginForm = reactive({ password: "", confirm: "" });
 const dashboard = ref(null);
 const hosts = ref([]);
 const hostSearch = ref("");
-const hostSort = ref("enabled-desc");
+const hostSortOptions = [
+  { title: "Enabled first", value: "enabled-desc" },
+  { title: "Disabled first", value: "enabled-asc" },
+  { title: "Name A-Z", value: "name" },
+];
+const hostSortStorageKey = "nixhostforge.hosts.sort";
+const hostSort = ref(savedHostSort());
 const builds = ref([]);
 const build = ref(null);
 const selectedPauseHours = ref(1);
@@ -50,11 +57,6 @@ const settings = reactive({
   },
   notificationUrls: [{ url: "", enabled: true }],
 });
-const hostSortOptions = [
-  { title: "Enabled first", value: "enabled-desc" },
-  { title: "Disabled first", value: "enabled-asc" },
-  { title: "Name A-Z", value: "name" },
-];
 const appVersion = import.meta.env.VITE_NIXHOSTFORGE_VERSION || "dev";
 
 const authenticatedPage = computed(
@@ -92,6 +94,19 @@ const latestCommitUrl = computed(() =>
     dashboard.value?.status?.lastCommit,
   ),
 );
+
+watch(hostSort, (value) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(hostSortStorageKey, value);
+});
+
+function savedHostSort() {
+  if (typeof localStorage === "undefined") return "enabled-desc";
+  const value = localStorage.getItem(hostSortStorageKey);
+  return hostSortOptions.some((option) => option.value === value)
+    ? value
+    : "enabled-desc";
+}
 
 function shortCommit(value) {
   return value ? value.slice(0, 12) : "unknown";
@@ -823,7 +838,7 @@ watchEffect(() => {
             title="Builds"
             subtitle="Recent host prebuild attempts."
           />
-          <build-table :builds="builds" @navigate="navigate" />
+          <build-table :builds="builds" groupable @navigate="navigate" />
         </template>
 
         <template v-else-if="path.startsWith('/builds/') && build">

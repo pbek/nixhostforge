@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -87,9 +88,39 @@ type pageData struct {
 	Status          SchedulerStatus
 	Hosts           []Host
 	Builds          []Build
+	BuildGroups     []buildGroup
+	GroupByHost     bool
 	Build           *Build
 	NotificationURL string
 	PauseHours      []int
+}
+
+type buildGroup struct {
+	Host   string
+	Builds []Build
+}
+
+func groupBuildsByHost(builds []Build) []buildGroup {
+	byHost := make(map[string][]Build)
+	for _, build := range builds {
+		host := strings.TrimSpace(build.Host)
+		if host == "" {
+			host = "unknown"
+		}
+		byHost[host] = append(byHost[host], build)
+	}
+
+	hosts := make([]string, 0, len(byHost))
+	for host := range byHost {
+		hosts = append(hosts, host)
+	}
+	sort.Strings(hosts)
+
+	groups := make([]buildGroup, 0, len(hosts))
+	for _, host := range hosts {
+		groups = append(groups, buildGroup{Host: host, Builds: byHost[host]})
+	}
+	return groups
 }
 
 func (a *App) setup(w http.ResponseWriter, r *http.Request) {
@@ -275,11 +306,19 @@ func (a *App) builds(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	groupByHost := r.URL.Query().Get("group") == "host"
 	a.render(
 		w,
 		r,
 		"builds",
-		pageData{Title: "Builds", Config: a.cfg, Status: a.Status(r.Context()), Builds: builds},
+		pageData{
+			Title:       "Builds",
+			Config:      a.cfg,
+			Status:      a.Status(r.Context()),
+			Builds:      builds,
+			BuildGroups: groupBuildsByHost(builds),
+			GroupByHost: groupByHost,
+		},
 	)
 }
 

@@ -46,6 +46,10 @@ func (a *App) settingsApp(w http.ResponseWriter, r *http.Request) {
 		}
 		data.Title = "Builds"
 		data.Builds = builds
+		data.GroupByHost = r.URL.Query().Get("group") == "host"
+		if data.GroupByHost {
+			data.BuildGroups = groupBuildsByHost(builds)
+		}
 		a.render(w, r, "builds", data)
 	case strings.HasPrefix(r.URL.Path, "/builds/"):
 		id, err := strconv.ParseInt(strings.TrimPrefix(r.URL.Path, "/builds/"), 10, 64)

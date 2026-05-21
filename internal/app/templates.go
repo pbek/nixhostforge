@@ -108,12 +108,12 @@ const templates = `
 
 {{define "builds"}}
 {{template "base-start" .}}
-<section class="panel"><h1>Builds</h1>{{template "build-table" .}}</section>
+<section class="panel"><div class="panel-head"><h1>Builds</h1><div class="inline"><span class="muted">Group by</span>{{if .GroupByHost}}<a href="/builds">None</a><strong>Host</strong>{{else}}<strong>None</strong><a href="/builds?group=host">Host</a>{{end}}</div></div>{{template "build-table" .}}</section>
 {{template "base-end" .}}
 {{end}}
 
 {{define "build-table"}}
-<div class="table-wrap"><table><thead><tr><th>ID</th><th>Host</th><th>Commit</th><th>Status</th><th>Started</th><th>Duration</th></tr></thead><tbody>{{range .Builds}}<tr><td><a href="/builds/{{.ID}}">#{{.ID}}</a></td><td>{{.Host}}</td><td><code>{{.ShortCommit}}</code></td><td><span class="badge {{.Status}}">{{.Status}}</span></td><td>{{.StartedAt.Format "Jan 02 15:04"}}</td><td>{{.Duration}}</td></tr>{{else}}<tr><td colspan="6">No builds yet.</td></tr>{{end}}</tbody></table></div>
+{{if .GroupByHost}}<div class="table-wrap"><table><thead><tr><th>ID</th><th>Host</th><th>Commit</th><th>Status</th><th>Started</th><th>Duration</th></tr></thead><tbody>{{range .BuildGroups}}<tr><td colspan="6"><strong>{{.Host}}</strong></td></tr>{{range .Builds}}<tr><td><a href="/builds/{{.ID}}">#{{.ID}}</a></td><td>{{.Host}}</td><td><code>{{.ShortCommit}}</code></td><td><span class="badge {{.Status}}">{{.Status}}</span></td><td>{{.StartedAt.Format "Jan 02 15:04"}}</td><td>{{.Duration}}</td></tr>{{end}}{{else}}<tr><td colspan="6">No builds yet.</td></tr>{{end}}</tbody></table></div>{{else}}<div class="table-wrap"><table><thead><tr><th>ID</th><th>Host</th><th>Commit</th><th>Status</th><th>Started</th><th>Duration</th></tr></thead><tbody>{{range .Builds}}<tr><td><a href="/builds/{{.ID}}">#{{.ID}}</a></td><td>{{.Host}}</td><td><code>{{.ShortCommit}}</code></td><td><span class="badge {{.Status}}">{{.Status}}</span></td><td>{{.StartedAt.Format "Jan 02 15:04"}}</td><td>{{.Duration}}</td></tr>{{else}}<tr><td colspan="6">No builds yet.</td></tr>{{end}}</tbody></table></div>{{end}}
 {{end}}
 
 {{define "build"}}

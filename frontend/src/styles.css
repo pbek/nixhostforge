@@ -266,6 +266,17 @@ a:hover {
   letter-spacing: -0.025em;
 }
 
+.build-table-title {
+  display: flex !important;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.build-group-select {
+  max-width: 11rem;
+}
+
 .v-card-subtitle {
   color: var(--muted) !important;
   line-height: 1.45;
@@ -316,6 +327,17 @@ a:hover {
 
 .v-table tbody tr:hover {
   background: rgba(148, 163, 184, 0.06);
+}
+
+.build-host-group-row td {
+  border-top: 1px solid rgba(167, 139, 250, 0.22) !important;
+  border-bottom-color: rgba(167, 139, 250, 0.18) !important;
+  background: rgba(139, 92, 246, 0.1);
+  color: #ddd6fe !important;
+  font-size: 0.78rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .v-list-item {
@@ -407,5 +429,14 @@ a:hover {
 
   .settings-logout {
     margin-left: 0;
+  }
+
+  .build-table-title {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .build-group-select {
+    max-width: none;
   }
 }

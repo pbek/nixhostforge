@@ -7,6 +7,8 @@
 - Link the dashboard latest commit to GitHub when the configured repository is hosted on GitHub.
 - Add search to the Hosts page.
 - Add host sorting on the Hosts page, defaulting to enabled hosts first.
+- Add remembered host grouping to the Builds page.
+- Remember the selected host sorting on the Hosts page.
 
 ### Fixed
 
