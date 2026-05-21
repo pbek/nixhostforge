@@ -186,6 +186,18 @@ a:hover {
   letter-spacing: -0.04em;
 }
 
+.commit-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgba(196, 181, 253, 0.42);
+  text-underline-offset: 0.18em;
+}
+
+.commit-link:hover {
+  color: #e0e7ff;
+  text-decoration-color: currentColor;
+}
+
 .stat-detail {
   margin-top: 0.35rem;
   overflow: hidden;

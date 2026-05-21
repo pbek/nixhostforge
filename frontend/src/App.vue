@@ -72,9 +72,31 @@ const pageName = computed(() => {
   if (path.value === "/settings") return "Settings";
   return "NixHostForge";
 });
+const latestCommitUrl = computed(() =>
+  githubCommitUrl(
+    dashboard.value?.repository?.repository,
+    dashboard.value?.status?.lastCommit,
+  ),
+);
 
 function shortCommit(value) {
   return value ? value.slice(0, 12) : "unknown";
+}
+
+function githubCommitUrl(repository, commit) {
+  if (!repository || !commit) return "";
+
+  const normalized = repository
+    .trim()
+    .replace(/\/$/, "")
+    .replace(/\.git$/, "");
+  const match =
+    normalized.match(/^https?:\/\/github\.com\/([^/?#\s]+)\/([^/?#\s]+)$/i) ||
+    normalized.match(/^git@github\.com:([^/?#\s]+)\/([^/?#\s]+)$/i) ||
+    normalized.match(/^ssh:\/\/git@github\.com\/([^/?#\s]+)\/([^/?#\s]+)$/i);
+
+  if (!match) return "";
+  return `https://github.com/${match[1]}/${match[2]}/commit/${commit}`;
 }
 
 function formatDate(value) {
@@ -582,7 +604,17 @@ watchEffect(() => {
                 ><v-card-text
                   ><div class="stat-label">Latest commit</div>
                   <div class="stat-value">
-                    {{ shortCommit(dashboard.status.lastCommit) }}
+                    <a
+                      v-if="latestCommitUrl"
+                      class="commit-link"
+                      :href="latestCommitUrl"
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      >{{ shortCommit(dashboard.status.lastCommit) }}</a
+                    >
+                    <template v-else>{{
+                      shortCommit(dashboard.status.lastCommit)
+                    }}</template>
                   </div>
                   <div
                     v-if="dashboard.status.lastCommitMessage"

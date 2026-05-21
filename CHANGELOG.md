@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0
+
+### Added
+
+- Link the dashboard latest commit to GitHub when the configured repository is hosted on GitHub.
+
 ## 0.4.0
 
 ### Added

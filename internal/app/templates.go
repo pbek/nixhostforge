@@ -1,6 +1,9 @@
 package app
 
-import "html/template"
+import (
+	"html/template"
+	"strings"
+)
 
 func parseTemplates() (*template.Template, error) {
 	funcs := template.FuncMap{
@@ -10,8 +13,37 @@ func parseTemplates() (*template.Template, error) {
 			}
 			return s
 		},
+		"githubCommitURL": githubCommitURL,
 	}
 	return template.New("root").Funcs(funcs).Parse(templates)
+}
+
+func githubCommitURL(repository, commit string) string {
+	repository = strings.TrimSuffix(strings.TrimSuffix(strings.TrimSpace(repository), "/"), ".git")
+	commit = strings.TrimSpace(commit)
+	if repository == "" || commit == "" {
+		return ""
+	}
+
+	var path string
+	switch {
+	case strings.HasPrefix(repository, "https://github.com/"):
+		path = strings.TrimPrefix(repository, "https://github.com/")
+	case strings.HasPrefix(repository, "http://github.com/"):
+		path = strings.TrimPrefix(repository, "http://github.com/")
+	case strings.HasPrefix(repository, "git@github.com:"):
+		path = strings.TrimPrefix(repository, "git@github.com:")
+	case strings.HasPrefix(repository, "ssh://git@github.com/"):
+		path = strings.TrimPrefix(repository, "ssh://git@github.com/")
+	default:
+		return ""
+	}
+
+	parts := strings.Split(path, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" || strings.ContainsAny(path, "?#") {
+		return ""
+	}
+	return "https://github.com/" + parts[0] + "/" + parts[1] + "/commit/" + commit
 }
 
 const templates = `
@@ -58,7 +90,7 @@ const templates = `
 {{define "dashboard"}}
 {{template "base-start" .}}
 <section class="hero"><div><p class="eyebrow">Prebuild NixOS hosts</p><h1>Catch broken host configs before your machines need them.</h1>{{if .Repo.Configured}}<p>Watching <code>{{.Repo.Repository}}</code> on <code>{{.Repo.Branch}}</code>.</p>{{else}}<p>No repository configured yet. Add one in Settings to start discovering hosts.</p>{{end}}</div><div class="inline"><form method="post" action="/check-now"><button>Check now</button></form><form method="post" action="/hosts/build-current"><button class="secondary" {{if not .Repo.Configured}}disabled{{end}}>Build current commit</button></form></div></section>
-<section class="grid stats"><article><span>Latest commit</span><strong>{{if .Status.LastCommit}}{{short .Status.LastCommit}}{{else}}unknown{{end}}</strong>{{if .Status.LastCommitMessage}}<p>{{.Status.LastCommitMessage}}</p>{{end}}</article><article><span>Running</span><strong>{{.Status.RunningBuilds}}</strong>{{if .Status.StaleRunningBuilds}}<p class="error">{{.Status.StaleRunningBuilds}} stale running build(s)</p>{{end}}</article><article><span>Last check</span><strong>{{if .Status.LastCheck.IsZero}}never{{else}}{{.Status.LastCheck.Format "15:04:05"}}{{end}}</strong></article><article><span>Pause</span><strong>{{if .Status.PausedUntil}}until {{.Status.PausedUntil.Format "Jan 02 15:04"}}{{else}}inactive{{end}}</strong></article></section>
+<section class="grid stats"><article><span>Latest commit</span><strong>{{if .Status.LastCommit}}{{with githubCommitURL .Repo.Repository .Status.LastCommit}}<a href="{{.}}" target="_blank" rel="noreferrer noopener">{{short $.Status.LastCommit}}</a>{{else}}{{short .Status.LastCommit}}{{end}}{{else}}unknown{{end}}</strong>{{if .Status.LastCommitMessage}}<p>{{.Status.LastCommitMessage}}</p>{{end}}</article><article><span>Running</span><strong>{{.Status.RunningBuilds}}</strong>{{if .Status.StaleRunningBuilds}}<p class="error">{{.Status.StaleRunningBuilds}} stale running build(s)</p>{{end}}</article><article><span>Last check</span><strong>{{if .Status.LastCheck.IsZero}}never{{else}}{{.Status.LastCheck.Format "15:04:05"}}{{end}}</strong></article><article><span>Pause</span><strong>{{if .Status.PausedUntil}}until {{.Status.PausedUntil.Format "Jan 02 15:04"}}{{else}}inactive{{end}}</strong></article></section>
 {{if .Status.LastError}}<p class="error">{{.Status.LastError}}</p>{{end}}
 {{if .Status.StaleRunningBuilds}}<p class="error">Some builds are marked running in the database but have no active job. Restart NixHostForge to reconcile them automatically.</p>{{end}}
 {{if not .Repo.Configured}}<section class="panel"><h2>Repository setup</h2><p class="muted">Set the flake repository to watch. This is available because no repository was provided by static config or the NixOS module.</p><form method="post" action="/settings"><input type="hidden" name="section" value="repository"><label>Repository URL<input name="repository" placeholder="https://github.com/example/nixos-config.git" required></label><label>Branch<input name="branch" value="{{.Repo.Branch}}" placeholder="main"></label><button>Save repository and check now</button></form></section>{{end}}
