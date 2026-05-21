@@ -8,6 +8,10 @@
 - Add search to the Hosts page.
 - Add host sorting on the Hosts page, defaulting to enabled hosts first.
 
+### Fixed
+
+- Update the Dashboard last check time after the `Check now` action completes.
+
 ## 0.4.0
 
 ### Added

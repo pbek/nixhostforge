@@ -273,8 +273,17 @@ async function login() {
 async function checkNow() {
   saving.check = true;
   try {
-    await request("/api/check-now", { method: "POST", body: "{}" });
-    notify("Check started.");
+    const data = await request("/api/check-now", {
+      method: "POST",
+      body: "{}",
+    });
+    applyDashboard(data);
+    notify(
+      data.status?.lastError
+        ? "Check completed with errors."
+        : "Check completed.",
+      data.status?.lastError ? "error" : "success",
+    );
   } catch (error) {
     notify(error.message, "error");
   } finally {

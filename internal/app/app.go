@@ -134,6 +134,10 @@ func (a *App) TriggerCheck(ctx context.Context) {
 	go a.checkOnce(context.Background())
 }
 
+func (a *App) CheckNow(ctx context.Context) {
+	a.checkOnce(ctx)
+}
+
 func (a *App) signalScheduler() {
 	select {
 	case a.wake <- struct{}{}:

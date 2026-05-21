@@ -723,8 +723,13 @@ func (a *App) apiCheckNow(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	a.TriggerCheck(r.Context())
-	writeJSON(w, http.StatusOK, map[string]string{"message": "check started"})
+	a.CheckNow(r.Context())
+	data, err := a.dashboardData(r.Context(), 8)
+	if err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, data)
 }
 
 func (a *App) apiPause(w http.ResponseWriter, r *http.Request) {
