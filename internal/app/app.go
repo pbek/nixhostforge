@@ -23,6 +23,10 @@ type App struct {
 	runningMu sync.Mutex
 	running   map[int64]runningBuild
 
+	pendingMu     sync.Mutex
+	pending       map[int64]PendingBuild
+	nextPendingID int64
+
 	statusMu sync.Mutex
 	status   SchedulerStatus
 }
@@ -46,6 +50,7 @@ func New(cfg Config) (*App, error) {
 		templates: tmpl,
 		wake:      make(chan struct{}, 1),
 		running:   map[int64]runningBuild{},
+		pending:   map[int64]PendingBuild{},
 	}
 	app.slotsCond = sync.NewCond(&app.slotsMu)
 	if err := app.cancelStaleRunningBuilds(context.Background(), "Build cancelled because NixHostForge restarted before this build finished."); err != nil {

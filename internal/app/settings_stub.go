@@ -46,6 +46,7 @@ func (a *App) settingsApp(w http.ResponseWriter, r *http.Request) {
 		}
 		data.Title = "Builds"
 		data.Builds = builds
+		data.UpcomingBuilds = a.PendingBuilds()
 		data.GroupByHost = r.URL.Query().Get("group") == "host"
 		if data.GroupByHost {
 			data.BuildGroups = groupBuildsByHost(builds)

@@ -410,6 +410,12 @@ a:hover {
   color: #67e8f9 !important;
 }
 
+.status-queued {
+  border: 1px solid rgba(139, 92, 246, 0.25) !important;
+  background: rgba(139, 92, 246, 0.14) !important;
+  color: #c4b5fd !important;
+}
+
 .status-cancelled {
   border: 1px solid rgba(245, 158, 11, 0.25) !important;
   background: rgba(245, 158, 11, 0.14) !important;

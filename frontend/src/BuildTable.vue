@@ -12,6 +12,8 @@ const groupStorageKey = "nixhostforge.buildTable.groupBy";
 const props = defineProps({
   builds: { type: Array, default: () => [] },
   groupable: { type: Boolean, default: false },
+  title: { type: String, default: "Recent builds" },
+  upcoming: { type: Boolean, default: false },
 });
 
 const groupBy = ref(savedGroupBy());
@@ -64,12 +66,16 @@ function duration(item) {
   const hours = Math.floor(minutes / 60);
   return `${hours}h ${minutes % 60}m`;
 }
+
+function buildType(item) {
+  return item.manual ? "manual" : "scheduled";
+}
 </script>
 
 <template>
   <v-card class="settings-card" rounded="xl">
     <v-card-title class="build-table-title">
-      <span>Recent builds</span>
+      <span>{{ title }}</span>
       <v-select
         v-if="groupable"
         v-model="groupBy"
@@ -84,17 +90,17 @@ function duration(item) {
     <v-table>
       <thead>
         <tr>
-          <th>ID</th>
+          <th v-if="!upcoming">ID</th>
           <th>Host</th>
           <th>Commit</th>
           <th>Status</th>
-          <th>Started</th>
-          <th>Duration</th>
+          <th>{{ upcoming ? "Queued" : "Started" }}</th>
+          <th>{{ upcoming ? "Type" : "Duration" }}</th>
         </tr>
       </thead>
       <tbody v-if="!groupedByHost">
         <tr v-for="build in builds" :key="build.id">
-          <td>
+          <td v-if="!upcoming">
             <a
               :href="`/builds/${build.id}`"
               @click.prevent="$emit('navigate', `/builds/${build.id}`)"
@@ -108,15 +114,15 @@ function duration(item) {
             }}</span>
           </td>
           <td>
-            <v-chip size="small" :class="`status-${build.status}`">{{
-              build.status
-            }}</v-chip>
+            <v-chip size="small" :class="`status-${build.status || 'queued'}`">
+              {{ build.status || "queued" }}
+            </v-chip>
           </td>
-          <td>{{ formatDate(build.startedAt) }}</td>
-          <td>{{ duration(build) }}</td>
+          <td>{{ formatDate(upcoming ? build.queuedAt : build.startedAt) }}</td>
+          <td>{{ upcoming ? buildType(build) : duration(build) }}</td>
         </tr>
         <tr v-if="!builds.length">
-          <td colspan="6">No builds yet.</td>
+          <td :colspan="upcoming ? 5 : 6">No builds yet.</td>
         </tr>
       </tbody>
       <template v-else-if="builds.length">

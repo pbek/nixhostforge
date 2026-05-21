@@ -9,6 +9,7 @@ import (
 	"log"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -18,6 +19,16 @@ import (
 type runningBuild struct {
 	cancel context.CancelFunc
 	id     int64
+}
+
+type PendingBuild struct {
+	ID         int64     `json:"id"`
+	Host       string    `json:"host"`
+	Repository string    `json:"repository"`
+	Branch     string    `json:"branch"`
+	CommitHash string    `json:"commitHash"`
+	Manual     bool      `json:"manual"`
+	QueuedAt   time.Time `json:"queuedAt"`
 }
 
 type SchedulerStatus struct {
@@ -151,7 +162,10 @@ func (a *App) checkOnce(ctx context.Context) {
 		if !ShouldBuild(previous, false) {
 			continue
 		}
-		go a.runBuild(
+		if a.hasPendingBuild(host, repoConfig.Repository, repoConfig.Branch, commit) {
+			continue
+		}
+		a.startBuild(
 			context.Background(),
 			repoDir,
 			repoConfig.Repository,
@@ -163,12 +177,23 @@ func (a *App) checkOnce(ctx context.Context) {
 	}
 }
 
-func (a *App) runBuild(
+func (a *App) startBuild(
 	ctx context.Context,
 	repoDir, repository, branch, host, commit string,
 	manual bool,
 ) {
+	pendingID := a.addPendingBuild(host, repository, branch, commit, manual)
+	go a.runBuild(ctx, pendingID, repoDir, repository, branch, host, commit, manual)
+}
+
+func (a *App) runBuild(
+	ctx context.Context,
+	pendingID int64,
+	repoDir, repository, branch, host, commit string,
+	manual bool,
+) {
 	a.acquireBuildSlot()
+	a.removePendingBuild(pendingID)
 	defer a.releaseBuildSlot()
 
 	if paused, _ := a.paused(ctx); paused && !manual {
@@ -248,6 +273,57 @@ func (a *App) runBuild(
 	}
 }
 
+func (a *App) addPendingBuild(host, repository, branch, commit string, manual bool) int64 {
+	a.pendingMu.Lock()
+	defer a.pendingMu.Unlock()
+	if a.pending == nil {
+		a.pending = map[int64]PendingBuild{}
+	}
+	a.nextPendingID++
+	id := a.nextPendingID
+	a.pending[id] = PendingBuild{
+		ID:         id,
+		Host:       host,
+		Repository: repository,
+		Branch:     branch,
+		CommitHash: commit,
+		Manual:     manual,
+		QueuedAt:   time.Now().UTC(),
+	}
+	return id
+}
+
+func (a *App) removePendingBuild(id int64) {
+	a.pendingMu.Lock()
+	delete(a.pending, id)
+	a.pendingMu.Unlock()
+}
+
+func (a *App) hasPendingBuild(host, repository, branch, commit string) bool {
+	a.pendingMu.Lock()
+	defer a.pendingMu.Unlock()
+	for _, build := range a.pending {
+		if build.Host == host && build.Repository == repository && build.Branch == branch &&
+			build.CommitHash == commit {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *App) PendingBuilds() []PendingBuild {
+	a.pendingMu.Lock()
+	defer a.pendingMu.Unlock()
+	builds := make([]PendingBuild, 0, len(a.pending))
+	for _, build := range a.pending {
+		builds = append(builds, build)
+	}
+	sort.Slice(builds, func(i, j int) bool {
+		return builds[i].QueuedAt.Before(builds[j].QueuedAt)
+	})
+	return builds
+}
+
 func (a *App) ManualBuild(ctx context.Context, host string) error {
 	repoDir, err := a.ensureRepo(ctx)
 	if err != nil {
@@ -258,7 +334,7 @@ func (a *App) ManualBuild(ctx context.Context, host string) error {
 		return err
 	}
 	repoConfig := a.RepositoryConfig(ctx)
-	go a.runBuild(
+	a.startBuild(
 		context.Background(),
 		repoDir,
 		repoConfig.Repository,
@@ -297,7 +373,7 @@ func (a *App) ManualBuildEnabledHosts(ctx context.Context) (int, string, error) 
 		return 0, commit, err
 	}
 	for _, host := range enabled {
-		go a.runBuild(
+		a.startBuild(
 			context.Background(),
 			repoDir,
 			repoConfig.Repository,

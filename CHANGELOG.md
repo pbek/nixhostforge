@@ -9,6 +9,7 @@
 - Add host sorting on the Hosts page, defaulting to enabled hosts first.
 - Add remembered host grouping to the Builds page.
 - Remember the selected host sorting on the Hosts page.
+- Show queued upcoming builds on the Builds page.
 
 ### Fixed
 

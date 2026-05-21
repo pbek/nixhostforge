@@ -26,6 +26,7 @@ const hostSortOptions = [
 const hostSortStorageKey = "nixhostforge.hosts.sort";
 const hostSort = ref(savedHostSort());
 const builds = ref([]);
+const upcomingBuilds = ref([]);
 const build = ref(null);
 const selectedPauseHours = ref(1);
 const saving = reactive({
@@ -238,7 +239,9 @@ async function loadPage() {
     } else if (path.value === "/hosts") {
       hosts.value = (await request("/api/hosts")).hosts || [];
     } else if (path.value === "/builds") {
-      builds.value = (await request("/api/builds")).builds || [];
+      const data = await request("/api/builds");
+      builds.value = data.builds || [];
+      upcomingBuilds.value = data.upcomingBuilds || [];
     } else if (path.value.startsWith("/builds/")) {
       build.value = (
         await request(`/api/builds/${currentBuildId.value}`)
@@ -837,6 +840,13 @@ watchEffect(() => {
           <page-title
             title="Builds"
             subtitle="Recent host prebuild attempts."
+          />
+          <build-table
+            v-if="upcomingBuilds.length"
+            class="mb-4"
+            :builds="upcomingBuilds"
+            title="Upcoming builds"
+            upcoming
           />
           <build-table :builds="builds" groupable @navigate="navigate" />
         </template>

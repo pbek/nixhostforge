@@ -108,7 +108,7 @@ const templates = `
 
 {{define "builds"}}
 {{template "base-start" .}}
-<section class="panel"><div class="panel-head"><h1>Builds</h1><div class="inline"><span class="muted">Group by</span>{{if .GroupByHost}}<a href="/builds">None</a><strong>Host</strong>{{else}}<strong>None</strong><a href="/builds?group=host">Host</a>{{end}}</div></div>{{template "build-table" .}}</section>
+<section class="panel"><div class="panel-head"><h1>Builds</h1><div class="inline"><span class="muted">Group by</span>{{if .GroupByHost}}<a href="/builds">None</a><strong>Host</strong>{{else}}<strong>None</strong><a href="/builds?group=host">Host</a>{{end}}</div></div>{{if .UpcomingBuilds}}<h2>Upcoming builds</h2><div class="table-wrap"><table><thead><tr><th>Host</th><th>Commit</th><th>Queued</th><th>Type</th></tr></thead><tbody>{{range .UpcomingBuilds}}<tr><td>{{.Host}}</td><td><code>{{short .CommitHash}}</code></td><td>{{.QueuedAt.Format "Jan 02 15:04"}}</td><td>{{if .Manual}}manual{{else}}scheduled{{end}}</td></tr>{{end}}</tbody></table></div>{{end}}<h2>Recent builds</h2>{{template "build-table" .}}</section>
 {{template "base-end" .}}
 {{end}}
 

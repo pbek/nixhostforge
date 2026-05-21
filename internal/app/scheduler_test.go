@@ -254,6 +254,33 @@ func TestNextCheckDelayUsesPauseExpiry(t *testing.T) {
 	}
 }
 
+func TestPendingBuilds(t *testing.T) {
+	app := &App{}
+	first := app.addPendingBuild("host-a", "repo", "main", "abc", false)
+	time.Sleep(time.Millisecond)
+	second := app.addPendingBuild("host-b", "repo", "main", "def", true)
+
+	if !app.hasPendingBuild("host-a", "repo", "main", "abc") {
+		t.Fatalf("hasPendingBuild() = false, want true")
+	}
+
+	builds := app.PendingBuilds()
+	if len(builds) != 2 {
+		t.Fatalf("PendingBuilds() length = %d, want 2", len(builds))
+	}
+	if builds[0].ID != first || builds[1].ID != second {
+		t.Fatalf("PendingBuilds() = %+v, want queued order", builds)
+	}
+	if !builds[1].Manual {
+		t.Fatalf("manual pending build = false, want true")
+	}
+
+	app.removePendingBuild(first)
+	if app.hasPendingBuild("host-a", "repo", "main", "abc") {
+		t.Fatalf("hasPendingBuild() = true after remove, want false")
+	}
+}
+
 func TestCancelStaleRunningBuilds(t *testing.T) {
 	ctx := context.Background()
 	store, err := OpenStore(filepath.Join(t.TempDir(), "test.db"))

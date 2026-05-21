@@ -66,6 +66,11 @@ type dashboardResponse struct {
 	PauseHours []int              `json:"pauseHours"`
 }
 
+type buildsResponse struct {
+	Builds         []Build        `json:"builds"`
+	UpcomingBuilds []PendingBuild `json:"upcomingBuilds"`
+}
+
 type hostToggleRequest struct {
 	Host    string `json:"host"`
 	Enabled bool   `json:"enabled"`
@@ -88,6 +93,7 @@ type pageData struct {
 	Status          SchedulerStatus
 	Hosts           []Host
 	Builds          []Build
+	UpcomingBuilds  []PendingBuild
 	BuildGroups     []buildGroup
 	GroupByHost     bool
 	Build           *Build
@@ -312,12 +318,13 @@ func (a *App) builds(w http.ResponseWriter, r *http.Request) {
 		r,
 		"builds",
 		pageData{
-			Title:       "Builds",
-			Config:      a.cfg,
-			Status:      a.Status(r.Context()),
-			Builds:      builds,
-			BuildGroups: groupBuildsByHost(builds),
-			GroupByHost: groupByHost,
+			Title:          "Builds",
+			Config:         a.cfg,
+			Status:         a.Status(r.Context()),
+			Builds:         builds,
+			UpcomingBuilds: a.PendingBuilds(),
+			BuildGroups:    groupBuildsByHost(builds),
+			GroupByHost:    groupByHost,
 		},
 	)
 }
@@ -731,7 +738,11 @@ func (a *App) apiBuilds(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"builds": builds})
+	writeJSON(
+		w,
+		http.StatusOK,
+		buildsResponse{Builds: builds, UpcomingBuilds: a.PendingBuilds()},
+	)
 }
 
 func (a *App) apiBuild(w http.ResponseWriter, r *http.Request) {
