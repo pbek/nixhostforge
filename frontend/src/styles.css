@@ -256,6 +256,10 @@ a:hover {
   background: rgba(15, 23, 42, 0.66);
 }
 
+.host-search {
+  max-width: 28rem;
+}
+
 .v-card-title {
   color: var(--text);
   font-weight: 800 !important;

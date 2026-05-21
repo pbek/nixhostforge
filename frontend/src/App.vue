@@ -16,6 +16,7 @@ const auth = reactive({ hasAdmin: true, authenticated: false });
 const loginForm = reactive({ password: "", confirm: "" });
 const dashboard = ref(null);
 const hosts = ref([]);
+const hostSearch = ref("");
 const builds = ref([]);
 const build = ref(null);
 const selectedPauseHours = ref(1);
@@ -71,6 +72,11 @@ const pageName = computed(() => {
   }
   if (path.value === "/settings") return "Settings";
   return "NixHostForge";
+});
+const filteredHosts = computed(() => {
+  const query = (hostSearch.value || "").trim().toLowerCase();
+  if (!query) return hosts.value;
+  return hosts.value.filter((host) => host.name.toLowerCase().includes(query));
 });
 const latestCommitUrl = computed(() =>
   githubCommitUrl(
@@ -731,9 +737,19 @@ watchEffect(() => {
             subtitle="Select which discovered NixOS hosts should be prebuilt."
           />
           <v-card class="settings-card" rounded="xl"
-            ><v-list bg-color="transparent"
+            ><v-card-text class="pb-0"
+              ><v-text-field
+                v-model="hostSearch"
+                class="host-search"
+                clearable
+                hide-details
+                label="Search hosts"
+                placeholder="Filter by host name"
+                variant="outlined"
+            /></v-card-text>
+            <v-list bg-color="transparent"
               ><v-list-item
-                v-for="host in hosts"
+                v-for="host in filteredHosts"
                 :key="host.name"
                 class="host-list-item"
                 ><template #prepend
@@ -759,7 +775,10 @@ watchEffect(() => {
                 ></v-list-item
               ><v-list-item
                 v-if="!hosts.length"
-                title="No hosts discovered yet." /></v-list
+                title="No hosts discovered yet." />
+              <v-list-item
+                v-else-if="!filteredHosts.length"
+                title="No hosts match your search." /></v-list
           ></v-card>
         </template>
 

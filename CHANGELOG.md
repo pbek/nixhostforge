@@ -5,6 +5,7 @@
 ### Added
 
 - Link the dashboard latest commit to GitHub when the configured repository is hosted on GitHub.
+- Add search to the Hosts page.
 
 ## 0.4.0
 
