@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0
+
+### Added
+
+- Present NixHostForge as a local Nix cache warmer and document an ncps cache proxy setup.
+
 ## 0.5.0
 
 ### Added

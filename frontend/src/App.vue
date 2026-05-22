@@ -610,9 +610,12 @@ watchEffect(() => {
               class="pa-6 pa-md-8 d-flex flex-column flex-md-row align-md-center justify-space-between ga-4"
             >
               <div>
-                <p class="eyebrow mb-2">Prebuild NixOS hosts</p>
+                <p class="eyebrow mb-2">
+                  Prebuild NixOS hosts and warm local caches
+                </p>
                 <h1 class="text-h3 text-md-h2 font-weight-bold mb-3">
-                  Catch broken host configs before your machines need them.
+                  Catch broken host configs and warm Nix caches before your
+                  machines need them.
                 </h1>
                 <p
                   v-if="dashboard.repository.configured"

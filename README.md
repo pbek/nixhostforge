@@ -1,6 +1,6 @@
 # NixHostForge
 
-NixHostForge prebuilds and verifies NixOS host configurations from a flake. It watches a Git repository, discovers `nixosConfigurations`, builds selected hosts, records the results, and notifies you when a host configuration fails before the host needs to build it.
+NixHostForge prebuilds and verifies NixOS host configurations from a flake. It watches a Git repository, discovers `nixosConfigurations`, builds selected hosts, records the results, warms local Nix caches, and notifies you when a host configuration fails before the host needs to build it.
 
 ![NixHostForge dashboard](./nixhostforge.webp)
 
@@ -12,6 +12,7 @@ NixHostForge prebuilds and verifies NixOS host configurations from a flake. It w
 - Web UI repository setup when no repository is configured by the module/static config.
 - Web UI scheduler setup for interval and concurrency when they are not configured by the module/static config.
 - Build history with logs and output paths.
+- Warms the builder's Nix store and local Nix cache proxies while prebuilding hosts.
 - Pause selector that stops currently running builds and prevents new builds for the selected number of hours.
 - First-use password setup and login sessions.
 - Failure notifications through one or more shoutrrr URLs.
@@ -40,7 +41,7 @@ branch = "main"
 interval = "15m"
 listen_address = "0.0.0.0"
 port = 9637
-public_url = "https://nixhostforge.example.com"
+public_url = "http://server.lan:9637"
 state_dir = "/tmp/nixhostforge"
 concurrency = 1
 ```
@@ -55,7 +56,7 @@ concurrency = 1
     branch = "main";
     listenAddress = "0.0.0.0";
     port = 9637;
-    publicUrl = "https://nixhostforge.example.com";
+    publicUrl = "http://server.lan:9637";
     openFirewall = false;
 
     # Optional. Leave unset to configure them in the web UI.
@@ -98,3 +99,34 @@ nix build --print-out-paths .#nixosConfigurations.<host>.config.system.build.top
 ```
 
 If a host fails for a commit, NixHostForge will not automatically try that host again until the repository has a new commit. You can still trigger a manual build from the Hosts page.
+
+## Local Nix Caches
+
+Prebuilding host configurations is also useful for warming local Nix caches. When the NixHostForge builder uses a local substituter, host builds pull the required closures through that cache before the target machines need them.
+
+One local cache proxy option is [ncps, the Nix Cache Proxy Server](https://github.com/kalbasit/ncps). A minimal NixOS setup looks like this:
+
+```nix
+{
+  services.ncps = {
+    enable = true;
+    cache = {
+      hostName = "server.lan";
+      maxSize = "50G";
+      lru.schedule = "0 2 * * *";
+    };
+    upstream = {
+      caches = [
+        "https://cache.nixos.org"
+        "https://nix-community.cachix.org"
+        "https://devenv.cachix.org"
+      ];
+      publicKeys = [
+        "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+        "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
+        "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw="
+      ];
+    };
+  };
+}
+```
