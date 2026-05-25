@@ -371,3 +371,35 @@ func TestCancelStaleRunningBuilds(t *testing.T) {
 		t.Fatalf("stale build log is empty")
 	}
 }
+
+func TestCancelSupersededPendingBuilds(t *testing.T) {
+	a := &App{}
+
+	// Add two pending builds for the same host/repo/branch but an old commit.
+	a.addPendingBuild("host1", "repo", "main", "old-commit", false)
+	a.addPendingBuild("host1", "repo", "main", "old-commit", false)
+	// Add a manual pending build for the same host (should NOT be cancelled).
+	a.addPendingBuild("host1", "repo", "main", "old-commit", true)
+	// Add a pending build for a different host (should NOT be cancelled).
+	a.addPendingBuild("host2", "repo", "main", "old-commit", false)
+
+	cancelled := a.cancelSupersededPendingBuilds("host1", "repo", "main", "new-commit")
+	if cancelled != 2 {
+		t.Fatalf("cancelSupersededPendingBuilds() = %d, want 2", cancelled)
+	}
+
+	pending := a.PendingBuilds()
+	if len(pending) != 2 {
+		t.Fatalf("after cancel: %d pending builds, want 2", len(pending))
+	}
+	for _, b := range pending {
+		if b.Host == "host1" && !b.Manual {
+			t.Fatalf("non-manual host1 build was not removed: %+v", b)
+		}
+	}
+
+	// Calling again with the same new commit should cancel nothing (already removed).
+	if n := a.cancelSupersededPendingBuilds("host1", "repo", "main", "new-commit"); n != 0 {
+		t.Fatalf("second call cancelled %d, want 0", n)
+	}
+}

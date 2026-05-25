@@ -10,6 +10,10 @@
 - Live duration counter on running builds ticks every second on all pages, including the build detail page and build tables.
 - Auto-scroll build log to the bottom on the detail page when a running build updates.
 
+### Fixed
+
+- Pending (queued) host builds that are superseded by a newly detected commit are now automatically removed from the queue, preventing stale builds from running after the repository has moved on.
+
 ## 0.5.0
 
 ### Added

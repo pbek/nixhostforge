@@ -162,6 +162,10 @@ func (a *App) checkOnce(ctx context.Context) {
 		if !ShouldBuild(previous, false) {
 			continue
 		}
+		if n := a.cancelSupersededPendingBuilds(host, repoConfig.Repository, repoConfig.Branch, commit); n > 0 {
+			log.Printf("cancelled %d superseded pending build(s) for host %s", n, host)
+			a.broadcastBuildsUpdate()
+		}
 		if a.hasPendingBuild(host, repoConfig.Repository, repoConfig.Branch, commit) {
 			continue
 		}
@@ -301,6 +305,28 @@ func (a *App) removePendingBuild(id int64) {
 	a.pendingMu.Lock()
 	delete(a.pending, id)
 	a.pendingMu.Unlock()
+}
+
+// cancelSupersededPendingBuilds removes non-manual pending builds for the given
+// host/repository/branch whose commit hash differs from the current commit.
+// This ensures that when a new commit is detected, stale queued items are
+// dropped before new ones are added.
+func (a *App) cancelSupersededPendingBuilds(
+	host, repository, branch, commit string,
+) (cancelled int) {
+	a.pendingMu.Lock()
+	defer a.pendingMu.Unlock()
+	for id, build := range a.pending {
+		if build.Manual {
+			continue
+		}
+		if build.Host == host && build.Repository == repository && build.Branch == branch &&
+			build.CommitHash != commit {
+			delete(a.pending, id)
+			cancelled++
+		}
+	}
+	return cancelled
 }
 
 func (a *App) hasPendingBuild(host, repository, branch, commit string) bool {
