@@ -29,6 +29,8 @@ type App struct {
 
 	statusMu sync.Mutex
 	status   SchedulerStatus
+
+	events *sseHub
 }
 
 func New(cfg Config) (*App, error) {
@@ -51,6 +53,7 @@ func New(cfg Config) (*App, error) {
 		wake:      make(chan struct{}, 1),
 		running:   map[int64]runningBuild{},
 		pending:   map[int64]PendingBuild{},
+		events:    newSSEHub(),
 	}
 	app.slotsCond = sync.NewCond(&app.slotsMu)
 	if err := app.cancelStaleRunningBuilds(context.Background(), "Build cancelled because NixHostForge restarted before this build finished."); err != nil {
@@ -78,6 +81,7 @@ func (a *App) Router() http.Handler {
 	mux.HandleFunc("/settings", a.requireAuth(a.settings))
 	mux.HandleFunc("/settings-static/", a.settingsAsset)
 	mux.HandleFunc("/api/auth", a.apiAuth)
+	mux.HandleFunc("/api/events", a.requireAuth(a.events.ServeHTTP))
 	mux.HandleFunc("/api/setup", a.apiSetup)
 	mux.HandleFunc("/api/login", a.apiLogin)
 	mux.HandleFunc("/api/dashboard", a.requireAuth(a.apiDashboard))

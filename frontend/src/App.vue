@@ -64,6 +64,77 @@ const settings = reactive({
   notificationUrls: [{ url: "", enabled: true }],
 });
 const appVersion = import.meta.env.VITE_NIXHOSTFORGE_VERSION || "dev";
+const liveConnected = ref(false);
+// Ticker that updates every second to drive live duration displays.
+const now = ref(Date.now());
+let nowTimer = null;
+
+// SSE connection
+let sseSource = null;
+
+function sseConnect() {
+  if (sseSource) return;
+  sseSource = new EventSource("/api/events");
+  sseSource.addEventListener("connected", () => {
+    liveConnected.value = true;
+  });
+  sseSource.addEventListener("builds", () => {
+    refreshBuildsData();
+  });
+  sseSource.addEventListener("status", () => {
+    refreshStatusData();
+  });
+  sseSource.onerror = () => {
+    liveConnected.value = false;
+    sseDisconnect();
+    // Reconnect after 3 seconds
+    setTimeout(() => {
+      if (auth.authenticated) sseConnect();
+    }, 3000);
+  };
+}
+
+function sseDisconnect() {
+  if (sseSource) {
+    sseSource.close();
+    sseSource = null;
+  }
+  liveConnected.value = false;
+}
+
+// Refresh only the data relevant to the current page without showing a loading
+// spinner, so the update feels seamless.
+async function refreshBuildsData() {
+  if (!auth.authenticated) return;
+  try {
+    if (path.value === "/") {
+      applyDashboard(await request("/api/dashboard"));
+    } else if (path.value === "/hosts") {
+      hosts.value = (await request("/api/hosts")).hosts || [];
+    } else if (path.value === "/builds") {
+      const data = await request("/api/builds");
+      builds.value = data.builds || [];
+      upcomingBuilds.value = data.upcomingBuilds || [];
+    } else if (path.value.startsWith("/builds/")) {
+      // Refresh single build; keep the log scrolled to bottom if running.
+      const data = await request(`/api/builds/${currentBuildId.value}`);
+      build.value = data.build;
+    }
+  } catch {
+    // Silently ignore SSE-triggered refresh errors
+  }
+}
+
+async function refreshStatusData() {
+  if (!auth.authenticated) return;
+  try {
+    if (path.value === "/") {
+      applyDashboard(await request("/api/dashboard"));
+    }
+  } catch {
+    // Silently ignore
+  }
+}
 
 const authenticatedPage = computed(
   () => !["/login", "/setup"].includes(path.value),
@@ -150,7 +221,7 @@ function formatDate(value) {
 
 function duration(item) {
   if (!item?.startedAt) return "";
-  const end = item.finishedAt ? new Date(item.finishedAt) : new Date();
+  const end = item.finishedAt ? new Date(item.finishedAt) : new Date(now.value);
   const seconds = Math.max(
     0,
     Math.round((end - new Date(item.startedAt)) / 1000),
@@ -231,6 +302,8 @@ async function loadAuth() {
   if (!auth.hasAdmin && path.value !== "/setup") navigate("/setup");
   if (auth.hasAdmin && !auth.authenticated && authenticatedPage.value)
     navigate("/login");
+  if (auth.authenticated) sseConnect();
+  if (!auth.authenticated) sseDisconnect();
 }
 
 async function loadPage() {
@@ -508,15 +581,33 @@ function onPopState() {
 
 onMounted(() => {
   window.addEventListener("popstate", onPopState);
+  nowTimer = setInterval(() => {
+    now.value = Date.now();
+  }, 1000);
   loadPage();
 });
-onUnmounted(() => window.removeEventListener("popstate", onPopState));
+onUnmounted(() => {
+  window.removeEventListener("popstate", onPopState);
+  sseDisconnect();
+  if (nowTimer) clearInterval(nowTimer);
+});
 watchEffect(() => {
   document.title =
     pageName.value === "NixHostForge"
       ? "NixHostForge"
       : `${pageName.value} - NixHostForge`;
 });
+
+// Auto-scroll the build log to the bottom when it updates for a running build.
+watch(
+  () => build.value?.log,
+  () => {
+    if (build.value?.status !== "running") return;
+    const el = document.querySelector(".log-block");
+    if (el) el.scrollTop = el.scrollHeight;
+  },
+  { flush: "post" },
+);
 </script>
 
 <template>
@@ -544,6 +635,13 @@ watchEffect(() => {
         >Settings</a
       >
       <a class="settings-logout" href="/logout">Logout</a>
+      <span
+        class="settings-live-indicator"
+        :class="liveConnected ? 'live-connected' : 'live-disconnected'"
+        :title="
+          liveConnected ? 'Live updates connected' : 'Live updates disconnected'
+        "
+      ></span>
     </nav>
 
     <v-main>

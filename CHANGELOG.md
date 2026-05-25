@@ -5,6 +5,10 @@
 ### Added
 
 - Present NixHostForge as a local Nix cache warmer and document an ncps cache proxy setup.
+- Real-time UI updates via Server-Sent Events (SSE): build lists, host status, dashboard stats, and scheduler status now update automatically without reloading the page.
+- Live connection indicator (green pulsing dot) in the navigation bar showing whether the SSE stream is active.
+- Live duration counter on running builds ticks every second on all pages, including the build detail page and build tables.
+- Auto-scroll build log to the bottom on the detail page when a running build updates.
 
 ## 0.5.0
 

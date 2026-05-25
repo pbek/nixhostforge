@@ -118,6 +118,31 @@ a:hover {
   margin-left: auto;
 }
 
+.settings-live-indicator {
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+  transition: background 400ms ease, box-shadow 400ms ease;
+}
+
+.settings-live-indicator.live-connected {
+  background: #4ade80;
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.72);
+  animation: live-pulse 2.4s ease-in-out infinite;
+}
+
+.settings-live-indicator.live-disconnected {
+  background: rgba(148, 163, 184, 0.32);
+  box-shadow: none;
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
 .hero-card {
   position: relative;
   overflow: hidden;

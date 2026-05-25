@@ -183,6 +183,7 @@ func (a *App) startBuild(
 	manual bool,
 ) {
 	pendingID := a.addPendingBuild(host, repository, branch, commit, manual)
+	a.broadcastBuildsUpdate()
 	go a.runBuild(ctx, pendingID, repoDir, repository, branch, host, commit, manual)
 }
 
@@ -197,6 +198,7 @@ func (a *App) runBuild(
 	defer a.releaseBuildSlot()
 
 	if paused, _ := a.paused(ctx); paused && !manual {
+		a.broadcastBuildsUpdate()
 		return
 	}
 
@@ -218,6 +220,7 @@ func (a *App) runBuild(
 	a.runningMu.Lock()
 	a.running[id] = runningBuild{cancel: cancel, id: id}
 	a.runningMu.Unlock()
+	a.broadcastBuildsUpdate()
 	defer func() {
 		a.runningMu.Lock()
 		delete(a.running, id)
@@ -263,6 +266,7 @@ func (a *App) runBuild(
 	if err := a.store.FinishBuild(context.Background(), id, status, exitCode, outputPath, logText); err != nil {
 		log.Printf("finish build: %v", err)
 	}
+	a.broadcastBuildsUpdate()
 	switch status {
 	case "success":
 		a.notifyBuildResult(context.Background(), id, host, repository, commit, status)
@@ -463,6 +467,7 @@ func (a *App) Pause(ctx context.Context, d time.Duration) error {
 		return err
 	}
 	a.CancelRunning("paused")
+	go a.broadcastStatusUpdate()
 	return nil
 }
 
@@ -471,6 +476,7 @@ func (a *App) Resume(ctx context.Context) error {
 		return err
 	}
 	a.signalScheduler()
+	go a.broadcastStatusUpdate()
 	return nil
 }
 
@@ -499,6 +505,7 @@ func (a *App) setStatus(commit, commitMessage string, checked time.Time, lastErr
 	}
 	a.status.LastCheck = checked
 	a.status.LastError = lastErr
+	go a.broadcastStatusUpdate()
 }
 
 func (a *App) Status(ctx context.Context) SchedulerStatus {
@@ -722,4 +729,22 @@ func lastStorePath(output string) string {
 		}
 	}
 	return ""
+}
+
+// broadcastBuildsUpdate sends a "builds" event to all SSE clients so the
+// frontend can refresh build lists and host status.
+func (a *App) broadcastBuildsUpdate() {
+	if a.events == nil {
+		return
+	}
+	a.events.Broadcast("builds", nil)
+}
+
+// broadcastStatusUpdate sends a "status" event to all SSE clients so the
+// frontend can refresh scheduler/dashboard status.
+func (a *App) broadcastStatusUpdate() {
+	if a.events == nil {
+		return
+	}
+	a.events.Broadcast("status", nil)
 }

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 
 defineEmits(["navigate"]);
 
@@ -20,6 +20,18 @@ const groupBy = ref(savedGroupBy());
 const groupedByHost = computed(
   () => props.groupable && groupBy.value === "host",
 );
+
+// Ticker for live duration updates.
+const now = ref(Date.now());
+let nowTimer = null;
+onMounted(() => {
+  nowTimer = setInterval(() => {
+    now.value = Date.now();
+  }, 1000);
+});
+onUnmounted(() => {
+  if (nowTimer) clearInterval(nowTimer);
+});
 
 const hostGroups = computed(() => {
   const groups = new Map();
@@ -55,7 +67,7 @@ function formatDate(value) {
 
 function duration(item) {
   if (!item?.startedAt) return "";
-  const end = item.finishedAt ? new Date(item.finishedAt) : new Date();
+  const end = item.finishedAt ? new Date(item.finishedAt) : new Date(now.value);
   const seconds = Math.max(
     0,
     Math.round((end - new Date(item.startedAt)) / 1000),
