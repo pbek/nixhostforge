@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0
+
+### Added
+
+- Allow ordering of enabled hosts using drag-and-drop with insertion-point and start/end drop-zone feedback, or Earlier/Later priority controls on the Hosts page; higher-priority hosts are built first when builds are scheduled.
+
 ## 0.6.0
 
 ### Added

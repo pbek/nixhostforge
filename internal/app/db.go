@@ -18,6 +18,7 @@ type Store struct {
 type Host struct {
 	Name        string    `json:"name"`
 	Enabled     bool      `json:"enabled"`
+	Priority    int       `json:"priority"`
 	Discovered  time.Time `json:"discovered"`
 	LastStatus  string    `json:"lastStatus"`
 	LastCommit  string    `json:"lastCommit"`
@@ -74,6 +75,9 @@ func (s *Store) migrate() error {
 		return err
 	}
 	if err := s.ensureColumn("builds", "branch", `alter table builds add column branch text not null default ''`); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("hosts", "priority", `alter table hosts add column priority integer not null default 0`); err != nil {
 		return err
 	}
 	_, err := s.db.Exec(
@@ -149,7 +153,7 @@ func (s *Store) UpsertHosts(ctx context.Context, names []string) error {
 
 func (s *Store) Hosts(ctx context.Context) ([]Host, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		select h.name, h.enabled, h.discovered_at,
+		select h.name, h.enabled, h.priority, h.discovered_at,
 		       coalesce(b.status, ''), coalesce(b.commit_hash, ''), coalesce(b.id, 0), b.started_at
 		from hosts h
 		left join builds b on b.id = (select id from builds where host = h.name order by started_at desc limit 1)
@@ -164,7 +168,7 @@ func (s *Store) Hosts(ctx context.Context) ([]Host, error) {
 		var enabled int
 		var discovered string
 		var lastBuildAt sql.NullString
-		if err := rows.Scan(&h.Name, &enabled, &discovered, &h.LastStatus, &h.LastCommit, &h.LastBuildID, &lastBuildAt); err != nil {
+		if err := rows.Scan(&h.Name, &enabled, &h.Priority, &discovered, &h.LastStatus, &h.LastCommit, &h.LastBuildID, &lastBuildAt); err != nil {
 			return nil, err
 		}
 		h.Enabled = enabled == 1
@@ -178,7 +182,10 @@ func (s *Store) Hosts(ctx context.Context) ([]Host, error) {
 }
 
 func (s *Store) EnabledHosts(ctx context.Context) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `select name from hosts where enabled = 1 order by name`)
+	rows, err := s.db.QueryContext(
+		ctx,
+		`select name from hosts where enabled = 1 order by priority desc, name`,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -201,6 +208,25 @@ func (s *Store) SetHostEnabled(ctx context.Context, name string, enabled bool) e
 	}
 	_, err := s.db.ExecContext(ctx, `update hosts set enabled = ? where name = ?`, value, name)
 	return err
+}
+
+func (s *Store) SetHostPriority(ctx context.Context, name string, priority int) error {
+	_, err := s.db.ExecContext(ctx, `update hosts set priority = ? where name = ?`, priority, name)
+	return err
+}
+
+func (s *Store) SetHostPriorities(ctx context.Context, priorities map[string]int) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for name, priority := range priorities {
+		if _, err := tx.ExecContext(ctx, `update hosts set priority = ? where name = ?`, priority, name); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (s *Store) LatestBuildFor(

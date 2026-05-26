@@ -19,12 +19,15 @@ const dashboard = ref(null);
 const hosts = ref([]);
 const hostSearch = ref("");
 const hostSortOptions = [
-  { title: "Enabled first", value: "enabled-desc" },
-  { title: "Disabled first", value: "enabled-asc" },
+  { title: "Enabled first (build order)", value: "enabled-desc" },
+  { title: "Disabled first (build order)", value: "enabled-asc" },
   { title: "Name A-Z", value: "name" },
 ];
 const hostSortStorageKey = "nixhostforge.hosts.sort";
 const hostSort = ref(savedHostSort());
+const draggedHostName = ref("");
+const dragOverHostName = ref("");
+const dragOverHostPosition = ref("");
 const builds = ref([]);
 const upcomingBuilds = ref([]);
 const build = ref(null);
@@ -165,6 +168,16 @@ const filteredHosts = computed(() => {
     : hosts.value;
   return [...filtered].sort(compareHosts);
 });
+const firstEnabledHostName = computed(
+  () => filteredHosts.value.find((host) => host.enabled)?.name || "",
+);
+const lastEnabledHostName = computed(() => {
+  let lastHostName = "";
+  for (const host of filteredHosts.value) {
+    if (host.enabled) lastHostName = host.name;
+  }
+  return lastHostName;
+});
 const latestCommitUrl = computed(() =>
   githubCommitUrl(
     dashboard.value?.repository?.repository,
@@ -194,8 +207,10 @@ function compareHosts(a, b) {
   if (hostSort.value === "name") return nameOrder;
 
   const enabledOrder = Number(a.enabled) - Number(b.enabled);
-  if (hostSort.value === "enabled-asc") return enabledOrder || nameOrder;
-  return -enabledOrder || nameOrder;
+  const priorityOrder = (b.priority || 0) - (a.priority || 0);
+  if (hostSort.value === "enabled-asc")
+    return enabledOrder || priorityOrder || nameOrder;
+  return -enabledOrder || priorityOrder || nameOrder;
 }
 
 function githubCommitUrl(repository, commit) {
@@ -434,6 +449,161 @@ async function toggleHost(host) {
   } finally {
     saving.host = "";
   }
+}
+
+async function setHostPriority(host, delta) {
+  await moveHost(host, delta > 0 ? -1 : 1);
+}
+
+function enabledHostsInBuildOrder() {
+  return [...hosts.value]
+    .filter((host) => host.enabled)
+    .sort(
+      (a, b) =>
+        (b.priority || 0) - (a.priority || 0) || a.name.localeCompare(b.name),
+    );
+}
+
+async function moveHost(host, direction) {
+  if (!host.enabled) return;
+  const orderedHosts = enabledHostsInBuildOrder();
+  const index = orderedHosts.findIndex(
+    (candidate) => candidate.name === host.name,
+  );
+  if (index < 0) return;
+  const nextIndex = Math.max(
+    0,
+    Math.min(orderedHosts.length - 1, index + direction),
+  );
+  if (nextIndex === index) return;
+  const [movedHost] = orderedHosts.splice(index, 1);
+  orderedHosts.splice(nextIndex, 0, movedHost);
+  await saveHostOrder(orderedHosts);
+}
+
+async function saveHostOrder(orderedHosts) {
+  const previousHosts = hosts.value;
+  const total = orderedHosts.length;
+  const priorities = new Map(
+    orderedHosts.map((host, index) => [host.name, total - index]),
+  );
+  hostSort.value = "enabled-desc";
+  hosts.value = hosts.value.map((host) =>
+    priorities.has(host.name)
+      ? { ...host, priority: priorities.get(host.name) }
+      : host,
+  );
+  try {
+    hosts.value =
+      (
+        await request("/api/hosts/priorities", {
+          method: "POST",
+          body: JSON.stringify({
+            hosts: orderedHosts.map((host, index) => ({
+              host: host.name,
+              priority: total - index,
+            })),
+          }),
+        })
+      ).hosts || [];
+  } catch (error) {
+    hosts.value = previousHosts;
+    notify(error.message, "error");
+  }
+}
+
+function startHostDrag(event, host) {
+  if (!host.enabled) return;
+  draggedHostName.value = host.name;
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", host.name);
+}
+
+function dragHostOver(event, host) {
+  if (
+    !host.enabled ||
+    !draggedHostName.value ||
+    draggedHostName.value === host.name
+  )
+    return;
+  event.preventDefault();
+  dragOverHostName.value = host.name;
+  const bounds = event.currentTarget.getBoundingClientRect();
+  dragOverHostPosition.value =
+    event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
+  event.dataTransfer.dropEffect = "move";
+}
+
+function dragHostOverEdge(event, position) {
+  if (!draggedHostName.value) return;
+  event.preventDefault();
+  dragOverHostName.value = `__${position}`;
+  dragOverHostPosition.value = position;
+  event.dataTransfer.dropEffect = "move";
+}
+
+async function dropHost(event, targetHost) {
+  if (!targetHost.enabled) return;
+  event.preventDefault();
+  const sourceName =
+    draggedHostName.value || event.dataTransfer.getData("text/plain");
+  if (!sourceName || sourceName === targetHost.name) {
+    endHostDrag();
+    return;
+  }
+
+  const orderedHosts = enabledHostsInBuildOrder();
+  const sourceIndex = orderedHosts.findIndex(
+    (host) => host.name === sourceName,
+  );
+  const targetIndex = orderedHosts.findIndex(
+    (host) => host.name === targetHost.name,
+  );
+  if (sourceIndex < 0 || targetIndex < 0) {
+    endHostDrag();
+    return;
+  }
+
+  const [movedHost] = orderedHosts.splice(sourceIndex, 1);
+  const targetIndexAfterRemoval = orderedHosts.findIndex(
+    (host) => host.name === targetHost.name,
+  );
+  const insertIndex =
+    dragOverHostPosition.value === "after"
+      ? targetIndexAfterRemoval + 1
+      : targetIndexAfterRemoval;
+  orderedHosts.splice(insertIndex, 0, movedHost);
+  await saveHostOrder(orderedHosts);
+  endHostDrag();
+}
+
+async function dropHostAtEdge(event, position) {
+  event.preventDefault();
+  const sourceName =
+    draggedHostName.value || event.dataTransfer.getData("text/plain");
+  const orderedHosts = enabledHostsInBuildOrder();
+  const sourceIndex = orderedHosts.findIndex(
+    (host) => host.name === sourceName,
+  );
+  if (sourceIndex < 0) {
+    endHostDrag();
+    return;
+  }
+
+  const [movedHost] = orderedHosts.splice(sourceIndex, 1);
+  orderedHosts.splice(
+    position === "end" ? orderedHosts.length : 0,
+    0,
+    movedHost,
+  );
+  await saveHostOrder(orderedHosts);
+  endHostDrag();
+}
+
+function endHostDrag() {
+  draggedHostName.value = "";
+  dragOverHostName.value = "";
+  dragOverHostPosition.value = "";
 }
 
 async function buildHost(host) {
@@ -925,33 +1095,96 @@ watch(
                     label="Sort hosts"
                     variant="outlined" /></v-col
               ></v-row>
+              <p class="text-medium-emphasis mt-3 mb-0">
+                Drag enabled hosts to set the build order, or use the Earlier
+                and Later buttons. Earlier hosts are scheduled first.
+              </p>
             </v-card-text>
             <v-list bg-color="transparent"
-              ><v-list-item
-                v-for="host in filteredHosts"
-                :key="host.name"
-                class="host-list-item"
-                ><template #prepend
-                  ><v-switch
-                    v-model="host.enabled"
-                    color="primary"
-                    hide-details
-                    :loading="saving.host === host.name"
-                    @change="toggleHost(host)" /></template
-                ><v-list-item-title>{{ host.name }}</v-list-item-title
-                ><v-list-item-subtitle
-                  >Last result: {{ host.lastStatus || "none" }}
-                  {{
-                    host.lastCommit ? `at ${shortCommit(host.lastCommit)}` : ""
-                  }}</v-list-item-subtitle
-                ><template #append
-                  ><v-btn
-                    variant="tonal"
-                    :loading="saving.build === host.name"
-                    @click="buildHost(host)"
-                    >Build now</v-btn
-                  ></template
-                ></v-list-item
+              ><template v-for="host in filteredHosts" :key="host.name"
+                ><v-list-item
+                  v-if="draggedHostName && host.name === firstEnabledHostName"
+                  class="host-drop-zone"
+                  :class="{
+                    'host-drop-zone-active': dragOverHostName === '__start',
+                  }"
+                  title="Drop here to move to the start"
+                  @dragover="dragHostOverEdge($event, 'start')"
+                  @drop="dropHostAtEdge($event, 'start')"
+                  >Drop here to move to the start</v-list-item
+                ><v-list-item
+                  class="host-list-item"
+                  :class="{
+                    'host-list-item-dragging': draggedHostName === host.name,
+                    'host-list-item-drop-target':
+                      dragOverHostName === host.name,
+                    'host-list-item-drop-before':
+                      dragOverHostName === host.name &&
+                      dragOverHostPosition === 'before',
+                    'host-list-item-drop-after':
+                      dragOverHostName === host.name &&
+                      dragOverHostPosition === 'after',
+                  }"
+                  :draggable="host.enabled"
+                  @dragstart="startHostDrag($event, host)"
+                  @dragover="dragHostOver($event, host)"
+                  @drop="dropHost($event, host)"
+                  @dragend="endHostDrag"
+                  ><template #prepend
+                    ><v-switch
+                      v-model="host.enabled"
+                      color="primary"
+                      hide-details
+                      :loading="saving.host === host.name"
+                      @change="toggleHost(host)" /></template
+                  ><v-list-item-title>{{ host.name }}</v-list-item-title
+                  ><v-list-item-subtitle
+                    >Last result: {{ host.lastStatus || "none" }}
+                    {{
+                      host.lastCommit
+                        ? `at ${shortCommit(host.lastCommit)}`
+                        : ""
+                    }}</v-list-item-subtitle
+                  ><template #append
+                    ><div class="d-flex align-center ga-2">
+                      <div class="d-flex flex-column ga-1">
+                        <v-btn
+                          density="compact"
+                          size="small"
+                          variant="tonal"
+                          :disabled="!host.enabled"
+                          :title="`Increase priority (current: ${host.priority || 0})`"
+                          @click="setHostPriority(host, 1)"
+                          >Earlier</v-btn
+                        ><v-btn
+                          density="compact"
+                          size="small"
+                          variant="text"
+                          :disabled="!host.enabled"
+                          :title="`Decrease priority (current: ${host.priority || 0})`"
+                          @click="setHostPriority(host, -1)"
+                          >Later</v-btn
+                        >
+                      </div>
+                      <v-btn
+                        variant="tonal"
+                        :loading="saving.build === host.name"
+                        @click="buildHost(host)"
+                        >Build now</v-btn
+                      >
+                    </div></template
+                  ></v-list-item
+                ><v-list-item
+                  v-if="draggedHostName && host.name === lastEnabledHostName"
+                  class="host-drop-zone"
+                  :class="{
+                    'host-drop-zone-active': dragOverHostName === '__end',
+                  }"
+                  title="Drop here to move to the end"
+                  @dragover="dragHostOverEdge($event, 'end')"
+                  @drop="dropHostAtEdge($event, 'end')"
+                  >Drop here to move to the end</v-list-item
+                ></template
               ><v-list-item
                 v-if="!hosts.length"
                 title="No hosts discovered yet." />

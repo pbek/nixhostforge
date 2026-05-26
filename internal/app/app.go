@@ -87,6 +87,8 @@ func (a *App) Router() http.Handler {
 	mux.HandleFunc("/api/dashboard", a.requireAuth(a.apiDashboard))
 	mux.HandleFunc("/api/hosts", a.requireAuth(a.apiHosts))
 	mux.HandleFunc("/api/hosts/toggle", a.requireAuth(a.apiHostsToggle))
+	mux.HandleFunc("/api/hosts/priority", a.requireAuth(a.apiHostsPriority))
+	mux.HandleFunc("/api/hosts/priorities", a.requireAuth(a.apiHostsPriorities))
 	mux.HandleFunc("/api/hosts/build", a.requireAuth(a.apiHostsBuild))
 	mux.HandleFunc("/api/hosts/build-current", a.requireAuth(a.apiHostsBuildCurrent))
 	mux.HandleFunc("/api/builds", a.requireAuth(a.apiBuilds))

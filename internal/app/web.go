@@ -86,6 +86,20 @@ type hostToggleRequest struct {
 	Enabled bool   `json:"enabled"`
 }
 
+type hostPriorityRequest struct {
+	Host     string `json:"host"`
+	Priority int    `json:"priority"`
+}
+
+type hostPriorityItem struct {
+	Host     string `json:"host"`
+	Priority int    `json:"priority"`
+}
+
+type hostPrioritiesRequest struct {
+	Hosts []hostPriorityItem `json:"hosts"`
+}
+
 type hostBuildRequest struct {
 	Host string `json:"host"`
 }
@@ -720,6 +734,58 @@ func (a *App) apiHostsToggle(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Enabled {
 		a.signalScheduler()
+	}
+	hosts, err := a.store.Hosts(r.Context())
+	if err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"hosts": hosts})
+}
+
+func (a *App) apiHostsPriority(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req hostPriorityRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	if err := a.store.SetHostPriority(r.Context(), req.Host, req.Priority); err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	hosts, err := a.store.Hosts(r.Context())
+	if err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"hosts": hosts})
+}
+
+func (a *App) apiHostsPriorities(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSONError(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req hostPrioritiesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	priorities := make(map[string]int, len(req.Hosts))
+	for _, host := range req.Hosts {
+		if host.Host == "" {
+			writeJSONError(w, "host is required", http.StatusBadRequest)
+			return
+		}
+		priorities[host.Host] = host.Priority
+	}
+	if err := a.store.SetHostPriorities(r.Context(), priorities); err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	hosts, err := a.store.Hosts(r.Context())
 	if err != nil {

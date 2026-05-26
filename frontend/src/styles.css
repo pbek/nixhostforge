@@ -371,6 +371,10 @@ a:hover {
   border-radius: 0.9rem !important;
 }
 
+.host-list-item {
+  position: relative;
+}
+
 .v-list-item:hover {
   border-color: rgba(148, 163, 184, 0.16);
   background: rgba(148, 163, 184, 0.06);
@@ -382,6 +386,59 @@ a:hover {
 
 .host-list-item .v-switch {
   margin-inline-end: 0.25rem;
+}
+
+.host-list-item[draggable="true"] {
+  cursor: grab;
+}
+
+.host-list-item[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.host-list-item-dragging {
+  opacity: 0.45;
+}
+
+.host-list-item-drop-target {
+  border-color: rgba(167, 139, 250, 0.45) !important;
+  background: rgba(139, 92, 246, 0.12) !important;
+}
+
+.host-list-item-drop-before::before,
+.host-list-item-drop-after::after {
+  position: absolute;
+  right: 0.75rem;
+  left: 0.75rem;
+  z-index: 2;
+  height: 0.22rem;
+  border-radius: 999px;
+  content: "";
+  background: linear-gradient(90deg, var(--primary-bright), var(--accent));
+  box-shadow: 0 0 18px rgba(139, 92, 246, 0.65);
+}
+
+.host-list-item-drop-before::before {
+  top: -0.23rem;
+}
+
+.host-list-item-drop-after::after {
+  bottom: -0.23rem;
+}
+
+.host-drop-zone {
+  border: 1px dashed rgba(167, 139, 250, 0.42) !important;
+  background: rgba(139, 92, 246, 0.08) !important;
+  color: var(--muted-strong) !important;
+  font-size: 0.86rem;
+  justify-content: center;
+  min-height: 2.6rem !important;
+}
+
+.host-drop-zone-active {
+  border-color: rgba(6, 182, 212, 0.72) !important;
+  background: rgba(6, 182, 212, 0.14) !important;
+  color: #e0f2fe !important;
 }
 
 .notification-levels {
