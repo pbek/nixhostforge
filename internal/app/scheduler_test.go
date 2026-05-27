@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -321,6 +322,46 @@ func TestPendingBuilds(t *testing.T) {
 	if app.hasPendingBuild("host-a", "repo", "main", "abc") {
 		t.Fatalf("hasPendingBuild() = true after remove, want false")
 	}
+}
+
+func TestAcquireBuildSlotPreservesPendingOrder(t *testing.T) {
+	store, err := OpenStore(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("OpenStore() error = %v", err)
+	}
+	defer func() { _ = store.Close() }()
+	app := &App{cfg: Config{Concurrency: 1}, store: store}
+	app.slotsCond = sync.NewCond(&app.slotsMu)
+	first := app.addPendingBuild("host-a", "repo", "main", "abc", false)
+	second := app.addPendingBuild("host-b", "repo", "main", "abc", false)
+
+	secondAcquired := make(chan bool, 1)
+	go func() {
+		secondAcquired <- app.acquireBuildSlot(second)
+	}()
+
+	select {
+	case <-secondAcquired:
+		t.Fatalf("second pending build acquired a slot before first")
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	if !app.acquireBuildSlot(first) {
+		t.Fatalf("first pending build did not acquire a slot")
+	}
+	app.removePendingBuild(first)
+	app.releaseBuildSlot()
+
+	select {
+	case ok := <-secondAcquired:
+		if !ok {
+			t.Fatalf("second pending build acquisition returned false")
+		}
+	case <-time.After(time.Second):
+		t.Fatalf("second pending build did not acquire after first released")
+	}
+	app.removePendingBuild(second)
+	app.releaseBuildSlot()
 }
 
 func TestCancelStaleRunningBuilds(t *testing.T) {

@@ -197,7 +197,10 @@ func (a *App) runBuild(
 	repoDir, repository, branch, host, commit string,
 	manual bool,
 ) {
-	a.acquireBuildSlot()
+	if !a.acquireBuildSlot(pendingID) {
+		a.broadcastBuildsUpdate()
+		return
+	}
 	a.removePendingBuild(pendingID)
 	defer a.releaseBuildSlot()
 
@@ -305,6 +308,30 @@ func (a *App) removePendingBuild(id int64) {
 	a.pendingMu.Lock()
 	delete(a.pending, id)
 	a.pendingMu.Unlock()
+	a.broadcastSlotUpdate()
+}
+
+func (a *App) isNextPendingBuild(id int64) bool {
+	a.pendingMu.Lock()
+	defer a.pendingMu.Unlock()
+	current, ok := a.pending[id]
+	if !ok {
+		return false
+	}
+	for _, build := range a.pending {
+		if build.QueuedAt.Before(current.QueuedAt) ||
+			(build.QueuedAt.Equal(current.QueuedAt) && build.ID < current.ID) {
+			return false
+		}
+	}
+	return true
+}
+
+func (a *App) pendingBuildExists(id int64) bool {
+	a.pendingMu.Lock()
+	defer a.pendingMu.Unlock()
+	_, ok := a.pending[id]
+	return ok
 }
 
 // cancelSupersededPendingBuilds removes non-manual pending builds for the given
@@ -315,7 +342,6 @@ func (a *App) cancelSupersededPendingBuilds(
 	host, repository, branch, commit string,
 ) (cancelled int) {
 	a.pendingMu.Lock()
-	defer a.pendingMu.Unlock()
 	for id, build := range a.pending {
 		if build.Manual {
 			continue
@@ -326,7 +352,19 @@ func (a *App) cancelSupersededPendingBuilds(
 			cancelled++
 		}
 	}
+	a.pendingMu.Unlock()
+	if cancelled > 0 {
+		a.broadcastSlotUpdate()
+	}
 	return cancelled
+}
+
+func (a *App) broadcastSlotUpdate() {
+	a.slotsMu.Lock()
+	if a.slotsCond != nil {
+		a.slotsCond.Broadcast()
+	}
+	a.slotsMu.Unlock()
 }
 
 func (a *App) hasPendingBuild(host, repository, branch, commit string) bool {
@@ -349,6 +387,9 @@ func (a *App) PendingBuilds() []PendingBuild {
 		builds = append(builds, build)
 	}
 	sort.Slice(builds, func(i, j int) bool {
+		if builds[i].QueuedAt.Equal(builds[j].QueuedAt) {
+			return builds[i].ID < builds[j].ID
+		}
 		return builds[i].QueuedAt.Before(builds[j].QueuedAt)
 	})
 	return builds
@@ -465,14 +506,17 @@ func (a *App) staleRunningBuilds(ctx context.Context) int {
 	return stale
 }
 
-func (a *App) acquireBuildSlot() {
+func (a *App) acquireBuildSlot(pendingID int64) bool {
 	a.slotsMu.Lock()
 	defer a.slotsMu.Unlock()
 	for {
+		if !a.pendingBuildExists(pendingID) {
+			return false
+		}
 		limit := a.SchedulerConfig(context.Background()).Concurrency
-		if a.activeSlot < limit {
+		if a.activeSlot < limit && a.isNextPendingBuild(pendingID) {
 			a.activeSlot++
-			return
+			return true
 		}
 		a.slotsCond.Wait()
 	}

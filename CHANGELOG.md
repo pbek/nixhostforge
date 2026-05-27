@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1
+
+### Fixed
+
+- Preserve the configured host build order for every queued enabled host instead of letting waiting builds race for the next scheduler slot and fall back to incidental ordering.
+
 ## 0.7.0
 
 ### Added
